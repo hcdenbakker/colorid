@@ -1,0 +1,8 @@
+[package]
+name = "simple_bloom"
+version = "0.1.0"
+authors = ["hcdenbakker <henkcdenbakker@gmail.com>"]
+
+[dependencies]
+bit-vec = "0.4.3"
+murmurhash64 = "0.3.1"
