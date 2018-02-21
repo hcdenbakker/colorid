@@ -138,7 +138,7 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("search") {
         //read BIGSI
         let filter = value_t!(matches, "filter", i32).unwrap_or(0);
-        let cov = value_t!(matches, "cov", f64).unwrap_or(0.35);
+        let cov = value_t!(matches, "shared_kmers", f64).unwrap_or(0.35);
         let bigsi_time = SystemTime::now();
         println!("Reading BIGSI");
         let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
