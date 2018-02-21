@@ -77,6 +77,22 @@ fn main() {
                         .short("q")
                         .takes_value(true)
                         .long("query"),
+                )
+                .arg(
+                    Arg::with_name("filter")
+                        .help("set minimum k-mer frequency ")
+                        .required(false)
+                        .short("f")
+                        .takes_value(true)
+                        .long("filter"),
+                )
+                .arg(
+                    Arg::with_name("shared_kmers")
+                        .help("set minimum proportion of shared k-mers with a reference")
+                        .required(false)
+                        .short("c")
+                        .takes_value(true)
+                        .long("cov"),
                 ),
         )
         .subcommand(
@@ -121,6 +137,8 @@ fn main() {
     }
     if let Some(matches) = matches.subcommand_matches("search") {
         //read BIGSI
+        let filter = value_t!(matches, "filter", i32).unwrap_or(0);
+        let cov = value_t!(matches, "cov", f64).unwrap_or(0.35);
         let bigsi_time = SystemTime::now();
         println!("Reading BIGSI");
         let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
@@ -139,7 +157,7 @@ fn main() {
         let quersy_in = matches.value_of("query").unwrap();
         if quersy_in.ends_with("gz") {
             let unfiltered = kmer_fa::kmers_from_fq(quersy_in.to_owned(), k_size);
-            let kmers_query = kmer_fa::clean_map(unfiltered, 0);
+            let kmers_query = kmer_fa::clean_map(unfiltered, filter);
             let num_kmers = kmers_query.len() as f64;
             println!("{} k-mers in query", num_kmers);
             let bigsi_search = SystemTime::now();
@@ -170,7 +188,7 @@ fn main() {
                     // The division was valid
                     Some(_x) => {
                         let genome_cov = v as f64 / *n_kmers.unwrap() as f64;
-                        if genome_cov > 0.35 {
+                        if genome_cov > cov {
                             println!(
                                 "{}: {:.2} {:.2} {} {}",
                                 k,
@@ -225,7 +243,7 @@ fn main() {
                     // The division was valid
                     Some(_x) => {
                         let genome_cov = v as f64 / *n_kmers.unwrap() as f64;
-                        if genome_cov > 0.25 {
+                        if genome_cov > cov {
                             println!(
                                 "{}: {:.2} {:.2} {}",
                                 k,
