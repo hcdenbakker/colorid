@@ -96,6 +96,45 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("batch_search")
+                .about("does a bigsi search on a bunch of fastq.gz files")
+                .version("1.0")
+                .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
+                .arg(
+                    Arg::with_name("bigsi")
+                        .short("b")
+                        .long("bigsi")
+                        .required(true)
+                        .takes_value(true),
+                )
+                .help("Sets BIGSI index to use for search")
+                .arg(
+                    Arg::with_name("query")
+                        .help("query file(-s)fastq.gz")
+                        .required(true)
+                        .min_values(1)
+                        .short("q")
+                        .takes_value(true)
+                        .long("query"),
+                )
+                .arg(
+                    Arg::with_name("filter")
+                        .help("set minimum k-mer frequency ")
+                        .required(false)
+                        .short("f")
+                        .takes_value(true)
+                        .long("filter"),
+                )
+                .arg(
+                    Arg::with_name("shared_kmers")
+                        .help("set minimum proportion of shared k-mers with a reference")
+                        .required(false)
+                        .short("c")
+                        .takes_value(true)
+                        .long("cov"),
+                ),
+        )    
+        .subcommand(
             SubCommand::with_name("test")
                 .about("controls testing features")
                 .version("1.3")
@@ -152,7 +191,8 @@ fn main() {
                 println!("Error: {:?}", e);
             }
         }
-        //now check if we can do a search
+        //now check if we can do a search: we can!
+        //rewrite search function, so bigsi is loaded once and do multiple searches
         let bigsi_search = SystemTime::now();
         let quersy_in = matches.value_of("query").unwrap();
         if quersy_in.ends_with("gz") {
@@ -270,4 +310,29 @@ fn main() {
             }
         }
     }
+    if let Some(matches) = matches.subcommand_matches("batch_search") {
+        let files: Vec<_> = matches.values_of("query").unwrap().collect();
+        let filter = value_t!(matches, "filter", i32).unwrap_or(0);
+        let cov = value_t!(matches, "shared_kmers", f64).unwrap_or(0.35);
+        let bigsi_time = SystemTime::now();
+        println!("Loading index");
+        let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
+            bigs_id::read_bigsi(matches.value_of("bigsi").unwrap());
+        match bigsi_time.elapsed() {
+            Ok(elapsed) => {
+                println!("Index loaded in {} seconds", elapsed.as_secs());
+            }
+            Err(e) => {
+                // an error occurred!
+                println!("Error: {:?}", e);
+            }
+        }        
+        bigs_id::batch_search(files, bigsi_map, colors_accession, n_ref_kmers,
+    bloom_size,
+    num_hash,
+    k_size,
+    filter,
+    cov)
+
+}
 }

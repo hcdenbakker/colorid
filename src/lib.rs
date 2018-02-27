@@ -159,46 +159,87 @@ pub fn search_bigsi(
     (report, uniq_freqs)
 }
 
-/*for now naive per read IDer, for now just takes the taxon with the highest frequency
-pub fn per_read_id(filename: String,
-                   bigsi_map: std::collections::HashMap<usize, bit_vec::BitVec>,
-                   colors_accession: std::collections::HashMap<usize, String >,
-                   bloom_size: usize,
-                   num_hash: usize,
-                   k_size: usize) -> std::collections::HashMap<std::string::String, u32>{
-   let mut f = File::open(filename).expect("file not found");
-   let mut map = HashMap::new();
-   let mut line_count = 1;
-   let d = GzDecoder::new(f);
-   for line in io::BufReader::new(d).lines() {
-       let l =  line.unwrap();
-       if line_count%4 == 2 {
-           let bigsi = bigsi_map.clone();
-           let colors = colors_accession.clone();
-           let read_vec = vec![l];
-           let read_kmers = kmer_fa::kmerize_vector(read_vec, k_size);
-           //we cannot use this function...overhead to high, I assume because we have to load the
-           //bigsi for every single iteration
-           let read_report = search_bigsi(read_kmers, bigsi, colors, bloom_size, num_hash, k_size);
-           let mut max = 0;
-           let mut max_label = String::from("default!");
-           for (k,v) in read_report{
-               if v > max{
-                   max = v;
-                   max_label = k.to_owned();
-               }
-           }
-           let count = map.entry(max_label.to_string()).or_insert(0);
-           *count += 1;
-           
-       }
-        line_count += 1;
-        println!("{}", line_count);
+pub fn batch_search(
+    files: Vec<&str>,
+    bigsi_map: std::collections::HashMap<usize, bit_vec::BitVec>,
+    colors_accession: std::collections::HashMap<usize, String>,
+    n_ref_kmers: std::collections::HashMap<String, usize>,
+    bloom_size: usize,
+    num_hash: usize,
+    k_size: usize,
+    filter: i32,
+    cov: f64,
+) {
+    for file in files {
+        if file.ends_with("gz") {
+            println!("{}", file);
+            println!("Counting k-mers, this may take a while!");
+            let unfiltered = kmer_fa::kmers_from_fq(file.to_owned(), k_size);
+            let kmers_query = kmer_fa::clean_map(unfiltered, filter);
+            let num_kmers = kmers_query.len() as f64;
+            println!("{} k-mers in query", num_kmers);
+            let mut report = HashMap::new();
+            let mut uniq_freqs = HashMap::new();
+            for (k, _) in &kmers_query {
+                let mut kmer_slices = Vec::new();
+                for i in 0..num_hash {
+                    let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
+                    let bi = bit_index as usize;
+                    //if bigsy contains bit_index, safe bit_vec on that position to temp vec, else break
+                    if bigsi_map.contains_key(&bi) {
+                        kmer_slices.push(bigsi_map.get(&bi).unwrap());
+                    } else {
+                        let count = report.entry(String::from("No hits!")).or_insert(0);
+                        *count += 1;
+                        break;
+                    }
+                }
+                //we have to deal with no hits!
+                if kmer_slices.len() == num_hash as usize {
+                    let original_first = kmer_slices[0];
+                    let mut first = bit_vec::BitVec::from_elem(original_first.len(), false);
+                    for i in 0..first.len() {
+                        if original_first[i] == true {
+                            first.set(i, true);
+                        }
+                    }
+                    for i in 1..num_hash {
+                        let j = i as usize;
+                        first.intersect(&kmer_slices[j]);
+                    }
+                    let mut hits = Vec::new();
+                    for i in 0..first.len() {
+                        if first[i] == true {
+                            hits.push(colors_accession.get(&i).unwrap());
+                        }
+                    }
+                    if hits.len() > 0 {
+                        for h in &hits {
+                            let count = report.entry(h.to_string()).or_insert(0);
+                            *count += 1;
+                        }
+                        if hits.len() == 1 {
+                            let key = hits[0];
+                            let value = *kmers_query.get(&k.to_string()).unwrap() as f64;
+                            uniq_freqs
+                                .entry(key.to_string())
+                                .or_insert(Vec::new())
+                                .push(value);
+                        }
+                    } else {
+                        let count = report.entry(String::from("No hits!")).or_insert(0);
+                        *count += 1;
+                    }
+                } else {
+                    let count = report.entry(String::from("No hits!")).or_insert(0);
+                    *count += 1;
+                }
+            }
+            generate_report(report, uniq_freqs, n_ref_kmers.to_owned(), cov);
+        }
     }
-
-    map
 }
-*/
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BigsyMap {
     pub bloom_size: usize,
@@ -298,4 +339,46 @@ pub fn mode(numbers: &Vec<f64>) -> usize {
         .max_by_key(|&(_, count)| count)
         .map(|(val, _)| val)
         .expect("Cannot compute the mode of zero numbers")
+}
+
+pub fn generate_report(
+    report: std::collections::HashMap<String, usize>,
+    uniq_freqs: std::collections::HashMap<String, Vec<f64>>,
+    n_ref_kmers: std::collections::HashMap<String, usize>,
+    cov: f64,
+) {
+    for (k, v) in report {
+        let frequencies = uniq_freqs.get(&k.to_string());
+        let mut mean: f64 = 0.0;
+        let mut modus: usize = 0;
+        match frequencies {
+            Some(_x) => {
+                mean = frequencies.unwrap().iter().fold(0.0, |a, &b| a + b)
+                    / frequencies.unwrap().len() as f64;
+                modus = mode(frequencies.unwrap());
+            }
+            None => continue,
+        }
+        let n_kmers = n_ref_kmers.get(&k.to_string());
+        match n_kmers {
+            // The division was valid
+            Some(_x) => {
+                let genome_cov = v as f64 / *n_kmers.unwrap() as f64;
+                if genome_cov > cov {
+                    println!(
+                        "{}: {:.2} {:.2} {} {}",
+                        k,
+                        genome_cov,
+                        mean,
+                        modus,
+                        frequencies.unwrap().len()
+                    );
+                }
+            }
+            // The division was invalid
+            None => continue,
+        }
+        //println!("{}: {:.2}", k, v as f64/num_kmers );
+        //println!("{}: {}", k, v);
+    }
 }
