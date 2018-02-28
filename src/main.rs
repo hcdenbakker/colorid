@@ -8,13 +8,13 @@ use std::time::{Duration, SystemTime};
 
 fn main() {
     let matches = App::new("bigsID")
-        .version("1.0")
+        .version("0.1")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .subcommand(
             SubCommand::with_name("build")
                 .about("builds a bigsi")
-                .version("1.0")
+                .version("0.1")
                 .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
                 .arg(
                     Arg::with_name("bigsi")
@@ -60,7 +60,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("search")
                 .about("does a bigsi search")
-                .version("1.0")
+                .version("0.1")
                 .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
                 .arg(
                     Arg::with_name("bigsi")
@@ -98,7 +98,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("batch_search")
                 .about("does a bigsi search on a bunch of fastq.gz files")
-                .version("1.0")
+                .version("0.1")
                 .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
                 .arg(
                     Arg::with_name("bigsi")
@@ -137,7 +137,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("test")
                 .about("controls testing features")
-                .version("1.3")
+                .version("0.1")
                 .author("Someone E. <someone_else@other.com>")
                 .arg(
                     Arg::with_name("debug")
