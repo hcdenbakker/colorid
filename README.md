@@ -16,7 +16,8 @@ SUBCOMMANDS:
     batch_search    does a bigsi search on a bunch of fastq.gz files
     build           builds a bigsi
     help            Prints this message or the help of the given subcommand(s)
-    search          does a bigsi search```
+    search          does a bigsi search
+```
 
 ## Create index
 
