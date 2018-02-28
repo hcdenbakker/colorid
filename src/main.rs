@@ -23,7 +23,13 @@ fn main() {
                         .required(true)
                         .takes_value(true),
                 )
-                .help("Sets file name to safe BIGSI")
+                .help(
+                              "
+                              -b, --bigsi=[FILE] 'Sets the name of the index file'
+                              -r, --refs      'two column tab delimited file, first column taxon name, second column file  with sequence data plus path'
+                              -k, --kmer      'sets kmer size to use for index'
+                              -n, --num_hashes  'number of hashes to use for bloom filters'
+                              -s, --bloom     'size bloom filter'")
                 .arg(
                     Arg::with_name("ref_file")
                         .help("Sets the input file to use")
@@ -69,7 +75,12 @@ fn main() {
                         .required(true)
                         .takes_value(true),
                 )
-                .help("Sets BIGSI index to use for search")
+                .help(
+                              "
+                              -b, --bigsi=[FILE] 'Sets the name of the index file for search'
+                              -q, --query      'query file in fasta or fastq.gz format'
+                              -f, --filter     'Sets threshold to filter k-mers by frequency'
+                              -p, --p_shared        'minimum proportion of kmers shared with reference'")
                 .arg(
                     Arg::with_name("query")
                         .help("query file (fastq.gz or fasta")
@@ -90,9 +101,9 @@ fn main() {
                     Arg::with_name("shared_kmers")
                         .help("set minimum proportion of shared k-mers with a reference")
                         .required(false)
-                        .short("c")
+                        .short("p")
                         .takes_value(true)
-                        .long("cov"),
+                        .long("p_shared"),
                 ),
         )
         .subcommand(
@@ -107,7 +118,12 @@ fn main() {
                         .required(true)
                         .takes_value(true),
                 )
-                .help("Sets BIGSI index to use for search")
+                .help(
+                              "
+                              -b, --bigsi=[FILE] 'Sets the name of the index file for search'
+                              -q, --query      'one or more fastq.gz formatted files to be queried'
+                              -f, --filter     'Sets threshold to filter k-mers by frequency'
+                              -p, --p_shared        'minimum proportion of kmers shared with reference'")
                 .arg(
                     Arg::with_name("query")
                         .help("query file(-s)fastq.gz")
@@ -129,12 +145,12 @@ fn main() {
                     Arg::with_name("shared_kmers")
                         .help("set minimum proportion of shared k-mers with a reference")
                         .required(false)
-                        .short("c")
+                        .short("p")
                         .takes_value(true)
-                        .long("cov"),
+                        .long("p_shared"),
                 ),
-        )    
-        .subcommand(
+        )
+        /*.subcommand(
             SubCommand::with_name("test")
                 .about("controls testing features")
                 .version("0.1")
@@ -144,7 +160,7 @@ fn main() {
                         .short("d")
                         .help("print debug information verbosely"),
                 ),
-        )
+        )*/
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("build") {
@@ -326,13 +342,17 @@ fn main() {
                 // an error occurred!
                 println!("Error: {:?}", e);
             }
-        }        
-        bigs_id::batch_search(files, bigsi_map, colors_accession, n_ref_kmers,
-    bloom_size,
-    num_hash,
-    k_size,
-    filter,
-    cov)
-
-}
+        }
+        bigs_id::batch_search(
+            files,
+            bigsi_map,
+            colors_accession,
+            n_ref_kmers,
+            bloom_size,
+            num_hash,
+            k_size,
+            filter,
+            cov,
+        )
+    }
 }
