@@ -19,6 +19,8 @@ SUBCOMMANDS:
     search          does a bigsi search
 ```
 
+# Example:
+
 ## Create index
 
 ``` ./target/release/bigs_id build -r ref_file_example.txt -b test.bxi -k 31 --bloom 50000000 -n 4```
@@ -31,4 +33,4 @@ Note! These parameters work well for single isolate, mixed samples with a few sp
 
 Takes gzipped fastq or fasta files
 
-Enjoy
+Enjoy!
