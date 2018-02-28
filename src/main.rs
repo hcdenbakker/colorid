@@ -226,41 +226,7 @@ fn main() {
                 k_size,
             );
 
-            //let report = proto_bigsi::per_read_id(quersy_in.to_owned(), bigsi_map, colors_accession, bloom_size, num_hash, k_size);
-            for (k, v) in report {
-                let frequencies = freqs.get(&k.to_string());
-                let mut mean: f64 = 0.0;
-                let mut mode: usize = 0;
-                match frequencies {
-                    Some(_x) => {
-                        mean = frequencies.unwrap().iter().fold(0.0, |a, &b| a + b)
-                            / frequencies.unwrap().len() as f64;
-                        mode = bigs_id::mode(frequencies.unwrap());
-                    }
-                    None => continue,
-                }
-                let n_kmers = n_ref_kmers.get(&k.to_string());
-                match n_kmers {
-                    // The division was valid
-                    Some(_x) => {
-                        let genome_cov = v as f64 / *n_kmers.unwrap() as f64;
-                        if genome_cov > cov {
-                            println!(
-                                "{}: {:.2} {:.2} {} {}",
-                                k,
-                                genome_cov,
-                                mean,
-                                mode,
-                                frequencies.unwrap().len()
-                            );
-                        }
-                    }
-                    // The division was invalid
-                    None => continue,
-                }
-                //println!("{}: {:.2}", k, v as f64/num_kmers );
-                //println!("{}: {}", k, v);
-            }
+            bigs_id::generate_report(report, freqs, n_ref_kmers, cov);
             match bigsi_search.elapsed() {
                 Ok(elapsed) => {
                     println!("{}", elapsed.as_secs());
@@ -284,37 +250,7 @@ fn main() {
                 num_hash,
                 k_size,
             );
-            for (k, v) in report {
-                let frequencies = freqs.get(&k.to_string());
-                let mut mean: f64 = 0.0;
-                match frequencies {
-                    Some(_x) => {
-                        mean = frequencies.unwrap().iter().fold(0.0, |a, &b| a + b)
-                            / frequencies.unwrap().len() as f64;
-                    }
-                    None => continue,
-                }
-                let n_kmers = n_ref_kmers.get(&k.to_string());
-                match n_kmers {
-                    // The division was valid
-                    Some(_x) => {
-                        let genome_cov = v as f64 / *n_kmers.unwrap() as f64;
-                        if genome_cov > cov {
-                            println!(
-                                "{}: {:.2} {:.2} {}",
-                                k,
-                                genome_cov,
-                                mean,
-                                frequencies.unwrap().len()
-                            );
-                        }
-                    }
-                    // The division was invalid
-                    None => continue,
-                }
-                //println!("{}: {:.2}", k, v/ *n_ref_kmers.get(&k.to_string()).unwrap() as u64);
-                //println!("{}: {} ", k, v);
-            }
+            bigs_id::generate_report(report, freqs, n_ref_kmers, cov);
             match bigsi_search.elapsed() {
                 Ok(elapsed) => {
                     println!("{}", elapsed.as_secs());
