@@ -8,7 +8,6 @@ use std::fs::File;
 
 //add a fasta to kmer bloom filter
 
-
 pub fn read_fasta(filename: String) -> Vec<String> {
     let mut f = File::open(filename).expect("file not found");
     let mut contents = String::new();
@@ -39,91 +38,103 @@ pub fn read_fasta(filename: String) -> Vec<String> {
     vec
 }
 
-pub fn kmerize_vector(v: Vec<String>, k: usize) -> std::collections::HashMap<std::string::String, i32> {
-let mut map = HashMap::new();
-for l in v  {
-       let length_l = l.len();
-            let l_r = revcomp(&l);
-            for i in 0..l.len()-k+1{
-                if l[i..i+k] < l_r[length_l-(i+k)..length_l-i]{
-                    let count = map.entry(l[i..i+k].to_string().to_uppercase()).or_insert(0);
-                    *count += 1;
-             } else {
-                let count = map.entry(l_r[length_l-(i+k)..length_l-i].to_string().to_uppercase()).or_insert(0);
+pub fn kmerize_vector(
+    v: Vec<String>,
+    k: usize,
+) -> std::collections::HashMap<std::string::String, i32> {
+    let mut map = HashMap::new();
+    for l in v {
+        let length_l = l.len();
+        let l_r = revcomp(&l);
+        for i in 0..l.len() - k + 1 {
+            if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                let count = map.entry(l[i..i + k].to_string().to_uppercase())
+                    .or_insert(0);
+                *count += 1;
+            } else {
+                let count = map.entry(
+                    l_r[length_l - (i + k)..length_l - i]
+                        .to_string()
+                        .to_uppercase(),
+                ).or_insert(0);
                 *count += 1;
             }
         }
-        }
-    map
     }
-
-pub fn kmers_from_fq(filename: String, k: usize) -> std::collections::HashMap<std::string::String, i32>{
-   let mut f = File::open(filename).expect("file not found");
-   let mut map = HashMap::new();
-   let mut line_count = 1;
-   let d = GzDecoder::new(f);
-   for line in io::BufReader::new(d).lines() {
-       let l =  line.unwrap();
-       let length_l = l.len();
-       if line_count%4 == 2 {
-            let l_r = revcomp(&l);
-            for i in 0..l.len()-k+1{
-                if l[i..i+k] < l_r[length_l-(i+k)..length_l-i]{
-                    let count = map.entry(l[i..i+k].to_string()).or_insert(0);
-                    *count += 1;
-             } else {
-                let count = map.entry(l_r[length_l-(i+k)..length_l-i].to_string()).or_insert(0);
-                *count += 1;
-            }
-        }
-        }
-
-        line_count += 1;
-    }
-    
     map
 }
 
-pub fn clean_map(map: std::collections::HashMap<std::string::String, i32>, t: i32) 
-    -> std::collections::HashMap<std::string::String, i32>{
+pub fn kmers_from_fq(
+    filename: String,
+    k: usize,
+) -> std::collections::HashMap<std::string::String, i32> {
+    let mut f = File::open(filename).expect("file not found");
+    let mut map = HashMap::new();
+    let mut line_count = 1;
+    let d = GzDecoder::new(f);
+    for line in io::BufReader::new(d).lines() {
+        let l = line.unwrap();
+        let length_l = l.len();
+        if line_count % 4 == 2 {
+            if length_l < k {
+                continue;
+            } else {
+                let l_r = revcomp(&l);
+                for i in 0..l.len() - k + 1 {
+                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                        let count = map.entry(l[i..i + k].to_string()).or_insert(0);
+                        *count += 1;
+                    } else {
+                        let count = map.entry(l_r[length_l - (i + k)..length_l - i].to_string())
+                            .or_insert(0);
+                        *count += 1;
+                    }
+                }
+            }
+        }
+        line_count += 1;
+    }
+
+    map
+}
+
+
+
+pub fn clean_map(
+    map: std::collections::HashMap<std::string::String, i32>,
+    t: i32,
+) -> std::collections::HashMap<std::string::String, i32> {
     let mut map_clean = HashMap::new();
     for (key, value) in map {
         if value > t {
-           map_clean.insert(key, value);
+            map_clean.insert(key, value);
         }
     }
     map_clean
 }
-    
 
-
-
-
-
-
-fn revcomp(dna: &str) -> String{
+fn revcomp(dna: &str) -> String {
     let mut rc_dna: String = String::with_capacity(dna.len());
     for c in dna.chars().rev() {
-            rc_dna.push(switch_base(c))
-        }
+        rc_dna.push(switch_base(c))
+    }
     rc_dna
 }
 
-fn switch_base(c:char) -> char {
+fn switch_base(c: char) -> char {
     match c {
-        'a' => 't' ,
-        'c' => 'g' ,
-        't' => 'a' ,
-        'g' => 'c' ,
+        'a' => 't',
+        'c' => 'g',
+        't' => 'a',
+        'g' => 'c',
         'u' => 'a',
         'n' => 'n',
-        'A' => 'T' ,
-        'C' => 'G' ,
-        'T' => 'A' ,
+        'A' => 'T',
+        'C' => 'G',
+        'T' => 'A',
         'G' => 'C',
         'U' => 'A',
         'N' => 'N',
-         _ => 'N',
+        _ => 'N',
     }
 }
-
