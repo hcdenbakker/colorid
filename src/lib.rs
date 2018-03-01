@@ -430,13 +430,19 @@ pub fn generate_report(
         let frequencies = uniq_freqs.get(&k.to_string());
         let mut mean: f64 = 0.0;
         let mut modus: usize = 0;
+        let mut specific_kmers: usize;
         match frequencies {
             Some(_x) => {
                 mean = frequencies.unwrap().iter().fold(0.0, |a, &b| a + b)
                     / frequencies.unwrap().len() as f64;
                 modus = mode(frequencies.unwrap());
+                specific_kmers = frequencies.unwrap().len();
             }
-            None => continue,
+            None =>{
+                        mean = 0.0;
+                        modus = 0;
+                        specific_kmers = 0;
+            }
         }
         let n_kmers = n_ref_kmers.get(&k.to_string());
         match n_kmers {
@@ -449,7 +455,7 @@ pub fn generate_report(
                         genome_cov,
                         mean,
                         modus,
-                        frequencies.unwrap().len()
+                        specific_kmers
                     );
                 }
             }

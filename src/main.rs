@@ -238,7 +238,8 @@ fn main() {
             }
         } else {
             let vec_query = kmer_fa::read_fasta(quersy_in.to_owned());
-            let kmers_query = kmer_fa::kmerize_vector(vec_query, k_size);
+            let unfiltered = kmer_fa::kmerize_vector(vec_query, k_size);
+            let kmers_query = kmer_fa::clean_map(unfiltered, filter);
             let num_kmers = kmers_query.len() as f64;
             println!("{} k-mers in query", num_kmers);
             let bigsi_search = SystemTime::now();
