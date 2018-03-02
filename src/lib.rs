@@ -325,7 +325,7 @@ pub struct BigsyMap {
     pub num_hash: usize,
     pub k_size: usize,
     pub colors: HashMap<usize, String>,
-    pub map: HashMap<usize, Vec<u64>>,
+    pub map: HashMap<usize, Vec<u8>>,
     pub n_ref_kmers: HashMap<String, usize>,
 }
 
@@ -342,17 +342,7 @@ pub fn save_bigsi(
 {
     let mut bigsi_map = HashMap::new();
     for (k, v) in bigsi {
-        //create vector of integers from bitvec (v)
-        let mut positions = Vec::new();
-        for i in 0..v.len() {
-            let j = i as u64;
-            if v[i] == true {
-                positions.push(j);
-            }
-            if positions.len() > 0 {
-                bigsi_map.insert(k, positions.to_owned());
-            }
-        }
+        bigsi_map.insert(k, v.to_bytes());
     }
     let mappy = BigsyMap {
         map: bigsi_map,
@@ -388,12 +378,7 @@ pub fn read_bigsi(
     //    bigsi_map.insert(i, bit_vec::BitVec::from_elem(deserialized.colors.len(),false));
     //}
     for (key, vector) in deserialized.map {
-        let mut bitvector = bit_vec::BitVec::from_elem(deserialized.colors.len(), false);
-        for j in vector {
-            let z = j as usize;
-            bitvector.set(z, true);
-        }
-        bigsi_map.insert(key, bitvector);
+        bigsi_map.insert(key, BitVec::from_bytes(&vector));
     }
     (
         bigsi_map,
@@ -438,10 +423,10 @@ pub fn generate_report(
                 modus = mode(frequencies.unwrap());
                 specific_kmers = frequencies.unwrap().len();
             }
-            None =>{
-                        mean = 0.0;
-                        modus = 0;
-                        specific_kmers = 0;
+            None => {
+                mean = 0.0;
+                modus = 0;
+                specific_kmers = 0;
             }
         }
         let n_kmers = n_ref_kmers.get(&k.to_string());
@@ -451,11 +436,7 @@ pub fn generate_report(
                 if genome_cov > cov {
                     println!(
                         "{}: {:.2} {:.2} {} {}",
-                        k,
-                        genome_cov,
-                        mean,
-                        modus,
-                        specific_kmers
+                        k, genome_cov, mean, modus, specific_kmers
                     );
                 }
             }
