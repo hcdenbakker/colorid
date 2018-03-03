@@ -1,0 +1,4 @@
+Listeria_phage_B021	./test_data/refs/Listeria_phage_B021.fasta
+Listeria_phage_B051	./test_data/refs/Listeria_phage_B051.fasta
+Listeria_phage_B056	./test_data/refs/Listeria_phage_B056.fasta
+Listeria_phage_B545	./test_data/refs/Listeria_phage_B545.fasta
