@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/hcdenbakker/bigs_id.svg?branch=master)](https://travis-ci.org/hcdenbakker/bigs_id)
+
 # bigs_id
 
 An experiment with writing code in Rust and the BIGSI data-structure 
