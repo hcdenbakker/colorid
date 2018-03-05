@@ -1,5 +1,7 @@
 # bigs_id
 
+An experiment with writing code in Rust and the BIGSI data-structure 
+
 ## build
 
 ```cargo build --release```
