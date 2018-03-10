@@ -29,7 +29,6 @@ pub fn tab_to_map(filename: String) -> std::collections::HashMap<std::string::St
     for line in io::BufReader::new(f).lines() {
         let l = line.unwrap();
         let v: Vec<&str> = l.split("\t").collect();
-        //println!("{} {}",v[0], v[1]);
         map.insert(String::from(v[0]), String::from(v[1]));
     }
     map
@@ -51,14 +50,24 @@ pub fn build_bigsi2(
     let mut accessions = Vec::new();
     for (accession, v) in &map {
         println!("Adding {} to BIGSI", accession);
-        let vec = kmer_fa::read_fasta(v.to_string());
-        let kmers = kmer_fa::kmerize_vector(vec, k_size);
-        ref_kmer.insert(accession.to_string(), kmers.len());
-        let mut filter = BloomFilter::new(bloom_size as usize, num_hash as usize);
-        for (kmer, _) in &kmers {
-            filter.insert(&kmer);
+        if v.ends_with("gz") {
+            let unfiltered = kmer_fa::kmers_from_fq(v.to_owned(), k_size);
+            let kmers = kmer_fa::clean_map(unfiltered, 1);
+            let mut filter = BloomFilter::new(bloom_size as usize, num_hash as usize);
+            for (kmer, _) in &kmers {
+                filter.insert(&kmer);
+            }
+            bit_map.insert(accession, filter.bits);
+        } else {
+            let vec = kmer_fa::read_fasta(v.to_string());
+            let kmers = kmer_fa::kmerize_vector(vec, k_size);
+            ref_kmer.insert(accession.to_string(), kmers.len());
+            let mut filter = BloomFilter::new(bloom_size as usize, num_hash as usize);
+            for (kmer, _) in &kmers {
+                filter.insert(&kmer);
+            }
+            bit_map.insert(accession, filter.bits);
         }
-        bit_map.insert(accession, filter.bits);
     }
     for (accession, _) in &map {
         accessions.push(accession);
@@ -107,54 +116,36 @@ pub fn search_bigsi(
         for i in 0..num_hash {
             let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
             let bi = bit_index as usize;
-            //if bigsy contains bit_index, safe bit_vec on that position to temp vec, else break
-            if bigsi_map.contains_key(&bi) {
-                kmer_slices.push(bigsi_map.get(&bi).unwrap());
-            } else {
+            if bigsi_map.contains_key(&bi) == false {
                 let count = report.entry(String::from("No hits!")).or_insert(0);
                 *count += 1;
                 break;
+            } else {
+                kmer_slices.push(bigsi_map.get(&bi).unwrap());
             }
         }
-        //we have to deal with no hits!
-        if kmer_slices.len() == num_hash as usize {
-            let original_first = kmer_slices[0];
-            let mut first = bit_vec::BitVec::from_elem(original_first.len(), false);
-            for i in 0..first.len() {
-                if original_first[i] == true {
-                    first.set(i, true);
-                }
+        let mut first = kmer_slices[0].to_owned();
+        for i in 1..num_hash {
+            let j = i as usize;
+            first.intersect(&kmer_slices[j]);
+        }
+        let mut hits = Vec::new();
+        for i in 0..first.len() {
+            if first[i] == true {
+                hits.push(colors_accession.get(&i).unwrap());
             }
-            for i in 1..num_hash {
-                let j = i as usize;
-                first.intersect(&kmer_slices[j]);
-            }
-            let mut hits = Vec::new();
-            for i in 0..first.len() {
-                if first[i] == true {
-                    hits.push(colors_accession.get(&i).unwrap());
-                }
-            }
-            if hits.len() > 0 {
-                for h in &hits {
-                    let count = report.entry(h.to_string()).or_insert(0);
-                    *count += 1;
-                }
-                if hits.len() == 1 {
-                    let key = hits[0];
-                    let value = *kmer_query.get(&k.to_string()).unwrap() as f64;
-                    uniq_freqs
-                        .entry(key.to_string())
-                        .or_insert(Vec::new())
-                        .push(value);
-                }
-            } else {
-                let count = report.entry(String::from("No hits!")).or_insert(0);
-                *count += 1;
-            }
-        } else {
-            let count = report.entry(String::from("No hits!")).or_insert(0);
+        }
+        for h in &hits {
+            let count = report.entry(h.to_string()).or_insert(0);
             *count += 1;
+        }
+        if hits.len() == 1 {
+            let key = hits[0];
+            let value = *kmer_query.get(&k.to_string()).unwrap() as f64;
+            uniq_freqs
+                .entry(key.to_string())
+                .or_insert(Vec::new())
+                .push(value);
         }
     }
     (report, uniq_freqs)
@@ -171,6 +162,7 @@ pub fn batch_search(
     k_size: usize,
     filter: i32,
     cov: f64,
+    gene_search: bool,
 ) {
     for file in files {
         if file.ends_with("gz") {
@@ -188,54 +180,36 @@ pub fn batch_search(
                 for i in 0..num_hash {
                     let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
                     let bi = bit_index as usize;
-                    //if bigsy contains bit_index, safe bit_vec on that position to temp vec, else break
-                    if bigsi_map.contains_key(&bi) {
-                        kmer_slices.push(bigsi_map.get(&bi).unwrap());
-                    } else {
+                    if bigsi_map.contains_key(&bi) == false {
                         let count = report.entry(String::from("No hits!")).or_insert(0);
                         *count += 1;
                         break;
+                    } else {
+                        kmer_slices.push(bigsi_map.get(&bi).unwrap());
                     }
                 }
-                //we have to deal with no hits!
-                if kmer_slices.len() == num_hash as usize {
-                    let original_first = kmer_slices[0];
-                    let mut first = bit_vec::BitVec::from_elem(original_first.len(), false);
-                    for i in 0..first.len() {
-                        if original_first[i] == true {
-                            first.set(i, true);
-                        }
+                let mut first = kmer_slices[0].to_owned();
+                for i in 1..num_hash {
+                    let j = i as usize;
+                    first.intersect(&kmer_slices[j]);
+                }
+                let mut hits = Vec::new();
+                for i in 0..first.len() {
+                    if first[i] == true {
+                        hits.push(colors_accession.get(&i).unwrap());
                     }
-                    for i in 1..num_hash {
-                        let j = i as usize;
-                        first.intersect(&kmer_slices[j]);
-                    }
-                    let mut hits = Vec::new();
-                    for i in 0..first.len() {
-                        if first[i] == true {
-                            hits.push(colors_accession.get(&i).unwrap());
-                        }
-                    }
-                    if hits.len() > 0 {
-                        for h in &hits {
-                            let count = report.entry(h.to_string()).or_insert(0);
-                            *count += 1;
-                        }
-                        if hits.len() == 1 {
-                            let key = hits[0];
-                            let value = *kmers_query.get(&k.to_string()).unwrap() as f64;
-                            uniq_freqs
-                                .entry(key.to_string())
-                                .or_insert(Vec::new())
-                                .push(value);
-                        }
-                    } else {
-                        let count = report.entry(String::from("No hits!")).or_insert(0);
-                        *count += 1;
-                    }
-                } else {
-                    let count = report.entry(String::from("No hits!")).or_insert(0);
+                }
+                for h in &hits {
+                    let count = report.entry(h.to_string()).or_insert(0);
                     *count += 1;
+                }
+                if hits.len() == 1 {
+                    let key = hits[0];
+                    let value = *kmers_query.get(&k.to_string()).unwrap() as f64;
+                    uniq_freqs
+                        .entry(key.to_string())
+                        .or_insert(Vec::new())
+                        .push(value);
                 }
             }
             match bigsi_search.elapsed() {
@@ -247,7 +221,11 @@ pub fn batch_search(
                     println!("Error: {:?}", e);
                 }
             }
-            generate_report(report, uniq_freqs, n_ref_kmers.to_owned(), cov);
+            if gene_search == false {
+                generate_report(report, uniq_freqs, n_ref_kmers.to_owned(), cov);
+            } else {
+                generate_report_gene(report, num_kmers as usize);
+            }
         } else {
             //else we assume it is a fasta formatted file!
             println!("{}", file);
@@ -264,57 +242,43 @@ pub fn batch_search(
                 for i in 0..num_hash {
                     let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
                     let bi = bit_index as usize;
-                    //if bigsy contains bit_index, safe bit_vec on that position to temp vec, else break
-                    if bigsi_map.contains_key(&bi) {
-                        kmer_slices.push(bigsi_map.get(&bi).unwrap());
-                    } else {
+                    if bigsi_map.contains_key(&bi) == false {
                         let count = report.entry(String::from("No hits!")).or_insert(0);
                         *count += 1;
                         break;
+                    } else {
+                        kmer_slices.push(bigsi_map.get(&bi).unwrap());
                     }
                 }
-                //we have to deal with no hits!
-                if kmer_slices.len() == num_hash as usize {
-                    let original_first = kmer_slices[0];
-                    let mut first = bit_vec::BitVec::from_elem(original_first.len(), false);
-                    for i in 0..first.len() {
-                        if original_first[i] == true {
-                            first.set(i, true);
-                        }
+                let mut first = kmer_slices[0].to_owned();
+                for i in 1..num_hash {
+                    let j = i as usize;
+                    first.intersect(&kmer_slices[j]);
+                }
+                let mut hits = Vec::new();
+                for i in 0..first.len() {
+                    if first[i] == true {
+                        hits.push(colors_accession.get(&i).unwrap());
                     }
-                    for i in 1..num_hash {
-                        let j = i as usize;
-                        first.intersect(&kmer_slices[j]);
-                    }
-                    let mut hits = Vec::new();
-                    for i in 0..first.len() {
-                        if first[i] == true {
-                            hits.push(colors_accession.get(&i).unwrap());
-                        }
-                    }
-                    if hits.len() > 0 {
-                        for h in &hits {
-                            let count = report.entry(h.to_string()).or_insert(0);
-                            *count += 1;
-                        }
-                        if hits.len() == 1 {
-                            let key = hits[0];
-                            let value = *kmers_query.get(&k.to_string()).unwrap() as f64;
-                            uniq_freqs
-                                .entry(key.to_string())
-                                .or_insert(Vec::new())
-                                .push(value);
-                        }
-                    } else {
-                        let count = report.entry(String::from("No hits!")).or_insert(0);
-                        *count += 1;
-                    }
-                } else {
-                    let count = report.entry(String::from("No hits!")).or_insert(0);
+                }
+                for h in &hits {
+                    let count = report.entry(h.to_string()).or_insert(0);
                     *count += 1;
                 }
+                if hits.len() == 1 {
+                    let key = hits[0];
+                    let value = *kmers_query.get(&k.to_string()).unwrap() as f64;
+                    uniq_freqs
+                        .entry(key.to_string())
+                        .or_insert(Vec::new())
+                        .push(value);
+                }
             }
-            generate_report(report, uniq_freqs, n_ref_kmers.to_owned(), cov);
+            if gene_search == false {
+                generate_report(report, uniq_freqs, n_ref_kmers.to_owned(), cov);
+            } else {
+                generate_report_gene(report, num_kmers as usize);
+            }
         }
     }
 }
@@ -441,6 +405,18 @@ pub fn generate_report(
                 }
             }
             None => continue,
+        }
+    }
+}
+
+pub fn generate_report_gene(
+    report: std::collections::HashMap<String, usize>,
+    gene_kmer_size: usize,
+) {
+    for (k, v) in report {
+        let gene_match = v as f64 / gene_kmer_size as f64;
+        if gene_match > 0.35 {
+            println!("{}: {:.2}", k, gene_match);
         }
     }
 }

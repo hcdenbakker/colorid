@@ -104,6 +104,14 @@ fn main() {
                         .short("p")
                         .takes_value(true)
                         .long("p_shared"),
+                )
+                .arg(
+                    Arg::with_name("gene_search")
+                        .help("If set to 'true', the proportion of kmers from the query matching the entries in the index will be reported")
+                        .required(false)
+                        .short("g")
+                        .takes_value(true)
+                        .long("gene_search"),
                 ),
         )
         .subcommand(
@@ -148,6 +156,14 @@ fn main() {
                         .short("p")
                         .takes_value(true)
                         .long("p_shared"),
+                )
+                .arg(
+                    Arg::with_name("gene_search")
+                        .help("If set to 'true', the proportion of kmers from the query matching the entries in the index will be reported")
+                        .required(false)
+                        .short("g")
+                        .takes_value(true)
+                        .long("gene_search"),
                 ),
         )
         /*.subcommand(
@@ -194,6 +210,7 @@ fn main() {
         //read BIGSI
         let filter = value_t!(matches, "filter", i32).unwrap_or(0);
         let cov = value_t!(matches, "shared_kmers", f64).unwrap_or(0.35);
+        let gene_search = value_t!(matches, "gene_search", bool).unwrap_or(false);
         let bigsi_time = SystemTime::now();
         println!("Reading BIGSI");
         let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
@@ -251,7 +268,11 @@ fn main() {
                 num_hash,
                 k_size,
             );
-            bigs_id::generate_report(report, freqs, n_ref_kmers, cov);
+            if gene_search == false {
+                bigs_id::generate_report(report.to_owned(), freqs, n_ref_kmers, cov);
+            } else {
+                bigs_id::generate_report_gene(report, num_kmers as usize);
+            }
             match bigsi_search.elapsed() {
                 Ok(elapsed) => {
                     println!("{}", elapsed.as_secs());
@@ -267,6 +288,7 @@ fn main() {
         let files: Vec<_> = matches.values_of("query").unwrap().collect();
         let filter = value_t!(matches, "filter", i32).unwrap_or(0);
         let cov = value_t!(matches, "shared_kmers", f64).unwrap_or(0.35);
+        let gene_search = value_t!(matches, "gene_search", bool).unwrap_or(false);
         let bigsi_time = SystemTime::now();
         println!("Loading index");
         let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
@@ -290,6 +312,7 @@ fn main() {
             k_size,
             filter,
             cov,
+            gene_search,
         )
     }
 }
