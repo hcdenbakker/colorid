@@ -1,4 +1,8 @@
+[![Build Status](https://travis-ci.org/hcdenbakker/bigs_id.svg?branch=master)](https://travis-ci.org/hcdenbakker/bigs_id)
+
 # bigs_id
+
+An experiment with writing code in Rust and the BIGSI data-structure 
 
 ## build
 
@@ -23,7 +27,7 @@ SUBCOMMANDS:
 
 ## Create index
 
-``` ./target/release/bigs_id build -r ref_file_example.txt -b test.bxi -k 31 --bloom 50000000 -n 4```
+``` ./target/release/bigs_id build -r ref_file_example.txt -b test.bxi -k 31 --s 50000000 -n 4```
 
 Note! These parameters work well for single isolate, mixed samples with a few species. For complex metagenomic samples the BIGSI parameters need to be adjusted to adjust the false positive rate.
 
