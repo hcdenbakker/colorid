@@ -1,6 +1,7 @@
 extern crate bincode;
 extern crate bit_vec;
 extern crate flate2;
+extern crate indexmap;
 extern crate kmer_fa;
 extern crate murmurhash64;
 extern crate serde;
@@ -10,6 +11,7 @@ extern crate serde_json;
 extern crate simple_bloom;
 
 use std::collections::HashMap;
+use indexmap::IndexMap;
 use std::io;
 use std::io::prelude::*;
 use std::fs::File;
@@ -22,10 +24,16 @@ use std::io::Write;
 use std::error::Error;
 use flate2::read::GzDecoder;
 use std::time::{Duration, SystemTime};
+use flate2::write::ZlibEncoder;
+use flate2::read::ZlibDecoder;
+use flate2::Compression;
+use std::io::{BufReader, BufWriter};
+use std::io::prelude::*;
+use flate2::write::GzEncoder;
 
 pub fn tab_to_map(filename: String) -> std::collections::HashMap<std::string::String, String> {
     let mut map = HashMap::new();
-    let f = File::open(filename).expect("file not found");
+    let f = File::open(filename).expect("reference file not found");
     for line in io::BufReader::new(f).lines() {
         let l = line.unwrap();
         let v: Vec<&str> = l.split("\t").collect();
@@ -40,7 +48,8 @@ pub fn build_bigsi2(
     num_hash: usize,
     k_size: usize,
 ) -> (
-    std::collections::HashMap<usize, bit_vec::BitVec>,
+    //std::collections::HashMap<usize, bit_vec::BitVec>,
+    indexmap::IndexMap<usize, bit_vec::BitVec>,
     std::collections::HashMap<usize, String>,
     std::collections::HashMap<String, usize>,
 ) {
@@ -48,8 +57,11 @@ pub fn build_bigsi2(
     let mut bit_map = HashMap::new();
     let mut ref_kmer = HashMap::new();
     let mut accessions = Vec::new();
+    let mut counter = 1;
+    let map_length = map.len();
     for (accession, v) in &map {
-        println!("Adding {} to BIGSI", accession);
+        eprintln!("Adding {} to index ({}/{})", accession, counter, map_length);
+        counter += 1;
         if v.ends_with("gz") {
             let unfiltered = kmer_fa::kmers_from_fq(v.to_owned(), k_size);
             let kmers = kmer_fa::clean_map(unfiltered, 1);
@@ -80,7 +92,7 @@ pub fn build_bigsi2(
         colors_accession.insert(c, s.to_string());
     }
     let num_taxa = accessions.len();
-    let mut bigsi_map = HashMap::new();
+    let mut bigsi_map = IndexMap::new();
     for i in 0..bloom_size {
         let mut bitvec = bit_vec::BitVec::from_elem(num_taxa, false);
         for (t, s) in &bit_map {
@@ -98,7 +110,8 @@ pub fn build_bigsi2(
 //coverage per taxon
 pub fn search_bigsi(
     kmer_query: std::collections::HashMap<std::string::String, i32>,
-    bigsi_map: std::collections::HashMap<usize, bit_vec::BitVec>,
+    //bigsi_map: std::collections::HashMap<usize, bit_vec::BitVec>,
+    bigsi_map: indexmap::IndexMap<usize, bit_vec::BitVec>,
     colors_accession: std::collections::HashMap<usize, String>,
     bloom_size: usize,
     num_hash: usize,
@@ -106,11 +119,13 @@ pub fn search_bigsi(
 ) -> (
     std::collections::HashMap<String, usize>,
     std::collections::HashMap<String, Vec<f64>>,
+    std::collections::HashMap<String, Vec<f64>>,
 ) //hashmap with name and vector containing freqs taxon-specific kmers
 {
-    println!("Search! Collecting slices");
+    eprintln!("Search! Collecting slices");
     let mut report = HashMap::new();
     let mut uniq_freqs = HashMap::new();
+    let mut multi_freqs = HashMap::new();
     for (k, _) in &kmer_query {
         let mut kmer_slices = Vec::new();
         for i in 0..num_hash {
@@ -138,6 +153,11 @@ pub fn search_bigsi(
         for h in &hits {
             let count = report.entry(h.to_string()).or_insert(0);
             *count += 1;
+            let value = *kmer_query.get(&k.to_string()).unwrap() as f64;
+            multi_freqs
+                .entry(h.to_string())
+                .or_insert(Vec::new())
+                .push(value);
         }
         if hits.len() == 1 {
             let key = hits[0];
@@ -148,13 +168,15 @@ pub fn search_bigsi(
                 .push(value);
         }
     }
-    (report, uniq_freqs)
+    (report, uniq_freqs, multi_freqs)
 }
+
 // test with search_bigsi function show this will  introduce a ~13 second time overhead as opposed
 // to writing the search out
 pub fn batch_search(
     files: Vec<&str>,
-    bigsi_map: std::collections::HashMap<usize, bit_vec::BitVec>,
+    //bigsi_map: std::collections::HashMap<usize, bit_vec::BitVec>,
+    bigsi_map: indexmap::IndexMap<usize, bit_vec::BitVec>,
     colors_accession: std::collections::HashMap<usize, String>,
     n_ref_kmers: std::collections::HashMap<String, usize>,
     bloom_size: usize,
@@ -167,7 +189,7 @@ pub fn batch_search(
     for file in files {
         if file.ends_with("gz") {
             println!("{}", file);
-            println!("Counting k-mers, this may take a while!");
+            eprintln!("Counting k-mers, this may take a while!");
             let unfiltered = kmer_fa::kmers_from_fq(file.to_owned(), k_size);
             let kmers_query = kmer_fa::clean_map(unfiltered, filter);
             let num_kmers = kmers_query.len() as f64;
@@ -214,11 +236,11 @@ pub fn batch_search(
             }
             match bigsi_search.elapsed() {
                 Ok(elapsed) => {
-                    println!("Search: {} sec", elapsed.as_secs());
+                    eprintln!("Search: {} sec", elapsed.as_secs());
                 }
                 Err(e) => {
                     // an error occurred!
-                    println!("Error: {:?}", e);
+                    eprintln!("Error: {:?}", e);
                 }
             }
             if gene_search == false {
@@ -229,7 +251,7 @@ pub fn batch_search(
         } else {
             //else we assume it is a fasta formatted file!
             println!("{}", file);
-            println!("Counting k-mers, this may take a while!");
+            eprintln!("Counting k-mers, this may take a while!");
             let vec_query = kmer_fa::read_fasta(file.to_owned());
             let unfiltered = kmer_fa::kmerize_vector(vec_query, k_size);
             let kmers_query = kmer_fa::clean_map(unfiltered, filter);
@@ -294,7 +316,8 @@ pub struct BigsyMap {
 }
 
 pub fn save_bigsi(
-    bigsi: std::collections::HashMap<usize, bit_vec::BitVec>,
+    //bigsi: std::collections::HashMap<usize, bit_vec::BitVec>,
+    bigsi: indexmap::IndexMap<usize, bit_vec::BitVec>,
     colors_accession: std::collections::HashMap<usize, String>,
     n_ref_kmers_in: std::collections::HashMap<String, usize>,
     bloom_size_in: usize,
@@ -321,10 +344,43 @@ pub fn save_bigsi(
     writer.write_all(serialized.as_bytes());
 }
 
+pub fn save_bigsi_gz(
+    //bigsi: std::collections::HashMap<usize, bit_vec::BitVec>,
+    bigsi: indexmap::IndexMap<usize, bit_vec::BitVec>,
+    colors_accession: std::collections::HashMap<usize, String>,
+    n_ref_kmers_in: std::collections::HashMap<String, usize>,
+    bloom_size_in: usize,
+    num_hash_in: usize,
+    k_size_in: usize,
+    path: &str,
+)
+/*-> Result<(), Box<Error>>*/
+{
+    let mut bigsi_map = HashMap::new();
+    for (k, v) in bigsi {
+        bigsi_map.insert(k, v.to_bytes());
+    }
+    let mappy = BigsyMap {
+        map: bigsi_map,
+        colors: colors_accession,
+        n_ref_kmers: n_ref_kmers_in,
+        bloom_size: bloom_size_in,
+        num_hash: num_hash_in,
+        k_size: k_size_in,
+    };
+    let serialized = serde_json::to_string(&mappy).unwrap();
+    let f = File::create(path).unwrap();
+    //writer.write_all(serialized.as_bytes());
+    let mut gz = GzEncoder::new(f, Compression::new(9));
+    gz.write_all(serialized.as_bytes());
+    gz.finish();
+}
+
 pub fn read_bigsi(
     path: &str,
 ) -> (
-    std::collections::HashMap<usize, bit_vec::BitVec>,
+    //std::collections::HashMap<usize, bit_vec::BitVec>,
+    indexmap::IndexMap<usize, bit_vec::BitVec>,
     std::collections::HashMap<usize, String>,
     std::collections::HashMap<String, usize>,
     usize,
@@ -335,12 +391,7 @@ pub fn read_bigsi(
     let mut contents = String::new();
     file.read_to_string(&mut contents);
     let deserialized: BigsyMap = serde_json::from_str(&contents).unwrap();
-    let mut bigsi_map = HashMap::new();
-    //create a full hashmap with bitvectors (first naive implementation, takes care of 'empty'
-    //bitslices...may not be necessary...
-    //for i in 0..deserialized.bloom_size{
-    //    bigsi_map.insert(i, bit_vec::BitVec::from_elem(deserialized.colors.len(),false));
-    //}
+    let mut bigsi_map = IndexMap::new();
     for (key, vector) in deserialized.map {
         bigsi_map.insert(key, BitVec::from_bytes(&vector));
     }
@@ -354,6 +405,36 @@ pub fn read_bigsi(
     )
 }
 
+pub fn read_bigsi_gz(
+    path: &str,
+) -> (
+    //std::collections::HashMap<usize, bit_vec::BitVec>,
+    indexmap::IndexMap<usize, bit_vec::BitVec>,
+    std::collections::HashMap<usize, String>,
+    std::collections::HashMap<String, usize>,
+    usize,
+    usize,
+    usize,
+) {
+    let mut file = File::open(path).expect("file not found");
+    let mut gz = GzDecoder::new(file);
+    let mut contents = String::new();
+    gz.read_to_string(&mut contents);
+    let deserialized: BigsyMap =
+        serde_json::from_str(&contents).expect("Can't deserialize contents!");
+    let mut bigsi_map = IndexMap::new();
+    for (key, vector) in deserialized.map {
+        bigsi_map.insert(key, BitVec::from_bytes(&vector));
+    }
+    (
+        bigsi_map,
+        deserialized.colors,
+        deserialized.n_ref_kmers,
+        deserialized.bloom_size,
+        deserialized.num_hash,
+        deserialized.k_size,
+    )
+}
 //https://codereview.stackexchange.com/questions/173338/calculate-mean-median-and-mode-in-rust
 pub fn mode(numbers: &Vec<f64>) -> usize {
     let mut occurrences = HashMap::new();
@@ -401,6 +482,64 @@ pub fn generate_report(
                     println!(
                         "{}: {:.2} {:.2} {} {}",
                         k, genome_cov, mean, modus, specific_kmers
+                    );
+                }
+            }
+            None => continue,
+        }
+    }
+}
+
+pub fn generate_report_plus(
+    report: std::collections::HashMap<String, usize>,
+    uniq_freqs: std::collections::HashMap<String, Vec<f64>>,
+    multi_freqs: std::collections::HashMap<String, Vec<f64>>,
+    n_ref_kmers: std::collections::HashMap<String, usize>,
+    cov: f64,
+) {
+    for (k, v) in report {
+        let frequencies = uniq_freqs.get(&k.to_string());
+        let mut mean: f64 = 0.0;
+        let mut modus: usize = 0;
+        let mut specific_kmers: usize;
+        match frequencies {
+            Some(_x) => {
+                mean = frequencies.unwrap().iter().fold(0.0, |a, &b| a + b)
+                    / frequencies.unwrap().len() as f64;
+                modus = mode(frequencies.unwrap());
+                specific_kmers = frequencies.unwrap().len();
+            }
+            None => {
+                mean = 0.0;
+                modus = 0;
+                specific_kmers = 0;
+            }
+        }
+        let multi_frequencies = multi_freqs.get(&k.to_string());
+        let mut multi_mean: f64 = 0.0;
+        let mut multi_modus: usize = 0;
+        let mut multi_kmers: usize;
+        match multi_frequencies {
+            Some(_x) => {
+                multi_mean = multi_frequencies.unwrap().iter().fold(0.0, |a, &b| a + b)
+                    / multi_frequencies.unwrap().len() as f64;
+                multi_modus = mode(multi_frequencies.unwrap());
+                multi_kmers = multi_frequencies.unwrap().len();
+            }
+            None => {
+                multi_mean = 0.0;
+                multi_modus = 0;
+                multi_kmers = 0;
+            }
+        }
+        let n_kmers = n_ref_kmers.get(&k.to_string());
+        match n_kmers {
+            Some(_x) => {
+                let genome_cov = v as f64 / *n_kmers.unwrap() as f64;
+                if genome_cov > cov {
+                    println!(
+                        "{}: {:.2} {:.2} {} {:.2} {} {}",
+                        k, genome_cov, multi_mean, multi_modus, mean, modus, specific_kmers
                     );
                 }
             }
