@@ -4,7 +4,7 @@ extern crate clap;
 extern crate kmer_fa;
 
 use clap::{App, Arg, SubCommand};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 fn main() {
     let matches = App::new("bigsID")
@@ -266,7 +266,6 @@ fn main() {
                 eprintln!("Error: {:?}", e);
             }
         }
-        let bigsi_search = SystemTime::now();
         let quersy_in = matches.value_of("query").unwrap();
         if quersy_in.ends_with("gz") {
             let unfiltered = kmer_fa::kmers_from_fq(quersy_in.to_owned(), k_size);
@@ -280,7 +279,6 @@ fn main() {
                 colors_accession,
                 bloom_size,
                 num_hash,
-                k_size,
             );
 
             bigs_id::generate_report(report, freqs, n_ref_kmers, cov);
@@ -306,7 +304,6 @@ fn main() {
                 colors_accession,
                 bloom_size,
                 num_hash,
-                k_size,
             );
             if gene_search == false {
                 bigs_id::generate_report(report.to_owned(), freqs, n_ref_kmers, cov);

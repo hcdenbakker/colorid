@@ -1,4 +1,3 @@
-extern crate bincode;
 extern crate bit_vec;
 extern crate flate2;
 extern crate indexmap;
@@ -8,6 +7,7 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
+extern crate bincode;
 extern crate simple_bloom;
 
 use std::collections::HashMap;
@@ -18,18 +18,12 @@ use std::fs::File;
 use simple_bloom::BloomFilter;
 use murmurhash64::murmur_hash64a;
 use bit_vec::BitVec;
-use serde::Serialize;
-use serde_json::Serializer;
 use std::io::Write;
-use std::error::Error;
 use flate2::read::GzDecoder;
-use std::time::{Duration, SystemTime};
-use flate2::write::ZlibEncoder;
-use flate2::read::ZlibDecoder;
+use std::time::SystemTime;
 use flate2::Compression;
-use std::io::{BufReader, BufWriter};
-use std::io::prelude::*;
 use flate2::write::GzEncoder;
+use bincode::{serialize, deserialize, Infinite};
 
 pub fn tab_to_map(filename: String) -> std::collections::HashMap<std::string::String, String> {
     let mut map = HashMap::new();
@@ -110,17 +104,15 @@ pub fn build_bigsi2(
 //coverage per taxon
 pub fn search_bigsi(
     kmer_query: std::collections::HashMap<std::string::String, i32>,
-    //bigsi_map: std::collections::HashMap<usize, bit_vec::BitVec>,
     bigsi_map: indexmap::IndexMap<usize, bit_vec::BitVec>,
     colors_accession: std::collections::HashMap<usize, String>,
     bloom_size: usize,
     num_hash: usize,
-    k_size: usize,
 ) -> (
     std::collections::HashMap<String, usize>,
     std::collections::HashMap<String, Vec<f64>>,
     std::collections::HashMap<String, Vec<f64>>,
-) //hashmap with name and vector containing freqs taxon-specific kmers
+)
 {
     eprintln!("Search! Collecting slices");
     let mut report = HashMap::new();
@@ -175,7 +167,6 @@ pub fn search_bigsi(
 // to writing the search out
 pub fn batch_search(
     files: Vec<&str>,
-    //bigsi_map: std::collections::HashMap<usize, bit_vec::BitVec>,
     bigsi_map: indexmap::IndexMap<usize, bit_vec::BitVec>,
     colors_accession: std::collections::HashMap<usize, String>,
     n_ref_kmers: std::collections::HashMap<String, usize>,
@@ -305,7 +296,7 @@ pub fn batch_search(
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct BigsyMap {
     pub bloom_size: usize,
     pub num_hash: usize,
@@ -316,7 +307,6 @@ pub struct BigsyMap {
 }
 
 pub fn save_bigsi(
-    //bigsi: std::collections::HashMap<usize, bit_vec::BitVec>,
     bigsi: indexmap::IndexMap<usize, bit_vec::BitVec>,
     colors_accession: std::collections::HashMap<usize, String>,
     n_ref_kmers_in: std::collections::HashMap<String, usize>,
@@ -325,7 +315,6 @@ pub fn save_bigsi(
     k_size_in: usize,
     path: &str,
 )
-/*-> Result<(), Box<Error>>*/
 {
     let mut bigsi_map = HashMap::new();
     for (k, v) in bigsi {
@@ -339,13 +328,12 @@ pub fn save_bigsi(
         num_hash: num_hash_in,
         k_size: k_size_in,
     };
-    let serialized = serde_json::to_string(&mappy).unwrap();
+    let serialized: Vec<u8> = serialize(&mappy, Infinite).unwrap();
     let mut writer = File::create(path).unwrap();
-    writer.write_all(serialized.as_bytes());
+    writer.write_all(&serialized);
 }
 
 pub fn save_bigsi_gz(
-    //bigsi: std::collections::HashMap<usize, bit_vec::BitVec>,
     bigsi: indexmap::IndexMap<usize, bit_vec::BitVec>,
     colors_accession: std::collections::HashMap<usize, String>,
     n_ref_kmers_in: std::collections::HashMap<String, usize>,
@@ -354,7 +342,6 @@ pub fn save_bigsi_gz(
     k_size_in: usize,
     path: &str,
 )
-/*-> Result<(), Box<Error>>*/
 {
     let mut bigsi_map = HashMap::new();
     for (k, v) in bigsi {
@@ -368,18 +355,16 @@ pub fn save_bigsi_gz(
         num_hash: num_hash_in,
         k_size: k_size_in,
     };
-    let serialized = serde_json::to_string(&mappy).unwrap();
+    let serialized: Vec<u8> = serialize(&mappy, Infinite).unwrap();
     let f = File::create(path).unwrap();
-    //writer.write_all(serialized.as_bytes());
     let mut gz = GzEncoder::new(f, Compression::new(9));
-    gz.write_all(serialized.as_bytes());
+    gz.write_all(&serialized);
     gz.finish();
 }
 
 pub fn read_bigsi(
     path: &str,
 ) -> (
-    //std::collections::HashMap<usize, bit_vec::BitVec>,
     indexmap::IndexMap<usize, bit_vec::BitVec>,
     std::collections::HashMap<usize, String>,
     std::collections::HashMap<String, usize>,
@@ -387,10 +372,10 @@ pub fn read_bigsi(
     usize,
     usize,
 ) {
-    let mut file = File::open(path).unwrap();
-    let mut contents = String::new();
-    file.read_to_string(&mut contents);
-    let deserialized: BigsyMap = serde_json::from_str(&contents).unwrap();
+    let mut file = File::open(path).expect("Can't open index!");
+    let mut contents = Vec::new();
+    file.read_to_end(&mut contents).expect("Can't read content");
+    let deserialized: BigsyMap = deserialize(&contents[..]).expect("cant deserialize");
     let mut bigsi_map = IndexMap::new();
     for (key, vector) in deserialized.map {
         bigsi_map.insert(key, BitVec::from_bytes(&vector));
@@ -408,7 +393,6 @@ pub fn read_bigsi(
 pub fn read_bigsi_gz(
     path: &str,
 ) -> (
-    //std::collections::HashMap<usize, bit_vec::BitVec>,
     indexmap::IndexMap<usize, bit_vec::BitVec>,
     std::collections::HashMap<usize, String>,
     std::collections::HashMap<String, usize>,
@@ -416,12 +400,11 @@ pub fn read_bigsi_gz(
     usize,
     usize,
 ) {
-    let mut file = File::open(path).expect("file not found");
+    let file = File::open(path).expect("file not found");
     let mut gz = GzDecoder::new(file);
-    let mut contents = String::new();
-    gz.read_to_string(&mut contents);
-    let deserialized: BigsyMap =
-        serde_json::from_str(&contents).expect("Can't deserialize contents!");
+    let mut contents = Vec::new();
+    gz.read_to_end(&mut contents);
+    let deserialized: BigsyMap = deserialize(&contents[..]).expect("cant deserialize");
     let mut bigsi_map = IndexMap::new();
     for (key, vector) in deserialized.map {
         bigsi_map.insert(key, BitVec::from_bytes(&vector));
