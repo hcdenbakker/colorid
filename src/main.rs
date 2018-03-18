@@ -8,7 +8,7 @@ use std::time::SystemTime;
 
 fn main() {
     let matches = App::new("bigsID")
-        .version("0.1")
+        .version("0.2")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .subcommand(
@@ -383,7 +383,7 @@ fn main() {
         let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
                 let bigsi_time = SystemTime::now();
         eprintln!("Loading index");
-        let (_bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
+        let (_bigsi_map, colors_accession, _n_ref_kmers, bloom_size, num_hash, k_size) =
             if compressed == false {
                 bigs_id::read_bigsi(matches.value_of("bigsi").unwrap())
             } else {
