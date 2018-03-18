@@ -9,7 +9,8 @@ An experiment with writing code in Rust and the BIGSI data-structure
 ```cargo build --release```
 
 ## Usage
-```USAGE:
+```
+USAGE:
     bigs_id [SUBCOMMAND]
 
 FLAGS:
@@ -20,6 +21,7 @@ SUBCOMMANDS:
     batch_search    does a bigsi search on a bunch of fastq.gz files
     build           builds a bigsi
     help            Prints this message or the help of the given subcommand(s)
+    info            dumps index parameters and accessions
     search          does a bigsi search
 ```
 
