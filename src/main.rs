@@ -201,6 +201,28 @@ fn main() {
                         .help("print debug information verbosely"),
                 ),
         )*/
+        .subcommand(
+            SubCommand::with_name("info")
+                .about("dumps index parameters and accessions")
+                .version("0.1")
+                .author("Henk den Bakker. <henkcdenbakker@gmail.com>")
+                .arg(
+                    Arg::with_name("bigsi")
+                        .short("b")
+                        .long("bigsi")
+                        .required(true)
+                        .takes_value(true)
+                        .help("index for which info is requested"),
+                        )
+                .arg(
+                    Arg::with_name("compressed")
+                        .help("If set to 'true', it is assumed a gz compressed index is used")
+                        .required(false)
+                        .short("c")
+                        .takes_value(true)
+                        .long("compressed"),
+                ),
+        )
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("build") {
@@ -356,5 +378,37 @@ fn main() {
             cov,
             gene_search,
         )
+    }
+    if let Some(matches) = matches.subcommand_matches("info") {
+        let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
+                let bigsi_time = SystemTime::now();
+        eprintln!("Loading index");
+        let (_bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
+            if compressed == false {
+                bigs_id::read_bigsi(matches.value_of("bigsi").unwrap())
+            } else {
+                bigs_id::read_bigsi_gz(matches.value_of("bigsi").unwrap())
+            };
+        match bigsi_time.elapsed() {
+            Ok(elapsed) => {
+                eprintln!("Index loaded in {} seconds", elapsed.as_secs());
+            }
+            Err(e) => {
+                // an error occurred!
+                eprintln!("Error: {:?}", e);
+            }
+        }
+        println!("BIGSI parameters:\nBloomfilter-size: {}\nNumber of hashes: {}\nK-mer size: {}", bloom_size, num_hash, k_size );
+        println!("Number of accessions in index: {}", colors_accession.len());
+        let mut accessions = Vec::new();
+        for (_k, v) in colors_accession{
+            accessions.push(v);
+        }
+        accessions.sort_by(|a, b| a.cmp(b));
+        for a in accessions{
+            println!("{}", a);
+        }
+        //let accessions_sorted = accessions.sort_by(|a, b| b.cmp(a));
+        //println!("{}", accessions_sorted.len());
     }
 }
