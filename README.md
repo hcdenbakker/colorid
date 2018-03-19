@@ -2,7 +2,7 @@
 
 # bigs_id
 
-An experiment with writing code in Rust and the BIGSI data-structure 
+An experiment with writing code in Rust and the BIGSI data-structure (preprint: https://www.biorxiv.org/content/early/2017/12/18/234955) and Phelim Bradley's implementation (https://github.com/Phelimb/BIGSI).
 
 ## Download a precompiled binary
 Here: https://github.com/hcdenbakker/bigs_id/releases
@@ -58,3 +58,6 @@ Takes gzipped fastq or fasta files
 More examples of uses to follow later.
 
 Enjoy!
+
+## Acknowledgements
+Lee Katz (https://github.com/lskatz) for his help with setting up Travis CI! 
