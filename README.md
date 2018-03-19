@@ -4,9 +4,25 @@
 
 An experiment with writing code in Rust and the BIGSI data-structure 
 
-## build
+## Download a precompiled binary
+Here: https://github.com/hcdenbakker/bigs_id/releases
+
+## or build it yourself with Rust!
+
+Install Rust on your system (https://www.rust-lang.org/en-US/install.html)
+
+Clone this repository:
+
+```git clone https://github.com/hcdenbakker/bigs_id.git```
+
+Get into the bigs_id directory:
+```cd bigs_id```
+
+And build your binary:
 
 ```cargo build --release```
+
+The binary can now be found in the `/target/release` directory within the `bigs_id` directory. Add the binary to your path for easy access.
 
 ## Usage
 ```
@@ -38,5 +54,7 @@ Note! These parameters work well for single isolate, mixed samples with a few sp
 ``` ./target/release/bigs_id search -b test.bxi -q your_query.fastq.gz ```
 
 Takes gzipped fastq or fasta files
+
+More examples of uses to follow later.
 
 Enjoy!
