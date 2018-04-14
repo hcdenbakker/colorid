@@ -3,7 +3,7 @@ extern crate flate2;
 use std::collections::HashMap;
 use std::io;
 use std::io::prelude::*;
-use flate2::read::GzDecoder;
+use flate2::read::MultiGzDecoder;
 use std::fs::File;
 
 //add a fasta to kmer bloom filter
@@ -71,7 +71,7 @@ pub fn kmers_from_fq(
     let mut f = File::open(filename).expect("file not found");
     let mut map = HashMap::new();
     let mut line_count = 1;
-    let d = GzDecoder::new(f);
+    let d = MultiGzDecoder::new(f);
     for line in io::BufReader::new(d).lines() {
         let l = line.unwrap();
         let length_l = l.len();
