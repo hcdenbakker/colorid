@@ -113,7 +113,7 @@ pub fn clean_map(
     map_clean
 }
 
-fn revcomp(dna: &str) -> String {
+pub fn revcomp(dna: &str) -> String {
     let mut rc_dna: String = String::with_capacity(dna.len());
     for c in dna.chars().rev() {
         rc_dna.push(switch_base(c))
