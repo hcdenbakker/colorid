@@ -223,6 +223,37 @@ fn main() {
                         .long("compressed"),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("read_id")
+                .about("id's reads")
+                .version("0.1")
+                .author("Henk den Bakker. <henkcdenbakker@gmail.com>")
+                .arg(
+                    Arg::with_name("bigsi")
+                        .short("b")
+                        .long("bigsi")
+                        .required(true)
+                        .takes_value(true)
+                        .help("index for which info is requested"),
+                        )
+                .arg(
+                    Arg::with_name("query")
+                        .help("query file(-s)fastq.gz")
+                        .required(true)
+                        .min_values(1)
+                        .short("q")
+                        .takes_value(true)
+                        .long("query"),
+                )
+                .arg(
+                    Arg::with_name("compressed")
+                        .help("If set to 'true', it is assumed a gz compressed index is used")
+                        .required(false)
+                        .short("c")
+                        .takes_value(true)
+                        .long("compressed"),
+                ),
+        )
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("build") {
@@ -381,7 +412,7 @@ fn main() {
     }
     if let Some(matches) = matches.subcommand_matches("info") {
         let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
-                let bigsi_time = SystemTime::now();
+        let bigsi_time = SystemTime::now();
         eprintln!("Loading index");
         let (_bigsi_map, colors_accession, _n_ref_kmers, bloom_size, num_hash, k_size) =
             if compressed == false {
@@ -398,17 +429,53 @@ fn main() {
                 eprintln!("Error: {:?}", e);
             }
         }
-        println!("BIGSI parameters:\nBloomfilter-size: {}\nNumber of hashes: {}\nK-mer size: {}", bloom_size, num_hash, k_size );
+        println!(
+            "BIGSI parameters:\nBloomfilter-size: {}\nNumber of hashes: {}\nK-mer size: {}",
+            bloom_size, num_hash, k_size
+        );
         println!("Number of accessions in index: {}", colors_accession.len());
         let mut accessions = Vec::new();
-        for (_k, v) in colors_accession{
+        for (_k, v) in colors_accession {
             accessions.push(v);
         }
         accessions.sort_by(|a, b| a.cmp(b));
-        for a in accessions{
+        for a in accessions {
             println!("{}", a);
         }
         //let accessions_sorted = accessions.sort_by(|a, b| b.cmp(a));
         //println!("{}", accessions_sorted.len());
+    }
+    if let Some(matches) = matches.subcommand_matches("read_id") {
+        let bigsi_time = SystemTime::now();
+        let fq = matches.value_of("query").unwrap();
+        let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
+        eprintln!("Loading index");
+        let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
+            if compressed == false {
+                bigs_id::read_bigsi(matches.value_of("bigsi").unwrap())
+            } else {
+                bigs_id::read_bigsi_gz(matches.value_of("bigsi").unwrap())
+            };
+        match bigsi_time.elapsed() {
+            Ok(elapsed) => {
+                eprintln!("Index loaded in {} seconds", elapsed.as_secs());
+            }
+            Err(e) => {
+                // an error occurred!
+                eprintln!("Error: {:?}", e);
+            }
+        }
+        let tax_map = bigs_id::per_read_search(
+            fq.to_string(),
+            bigsi_map,
+            colors_accession,
+            n_ref_kmers,
+            bloom_size,
+            num_hash,
+            k_size,
+        );
+        for (k, v) in tax_map {
+            println!("{}: {}", k, v);
+        }
     }
 }

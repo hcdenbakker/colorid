@@ -1,15 +1,17 @@
+#[macro_use]
+extern crate serde_derive;
+extern crate bincode;
 extern crate bit_vec;
 extern crate flate2;
 extern crate indexmap;
 extern crate kmer_fa;
 extern crate murmurhash64;
+extern crate probability;
 extern crate serde;
-#[macro_use]
-extern crate serde_derive;
 extern crate serde_json;
-extern crate bincode;
 extern crate simple_bloom;
 
+use probability::prelude::*;
 use std::collections::HashMap;
 use indexmap::IndexMap;
 use std::io;
@@ -23,7 +25,8 @@ use flate2::read::GzDecoder;
 use std::time::SystemTime;
 use flate2::Compression;
 use flate2::write::GzEncoder;
-use bincode::{serialize, deserialize, Infinite};
+use bincode::{deserialize, serialize, Infinite};
+use flate2::read::MultiGzDecoder;
 
 pub fn tab_to_map(filename: String) -> std::collections::HashMap<std::string::String, String> {
     let mut map = HashMap::new();
@@ -112,8 +115,7 @@ pub fn search_bigsi(
     std::collections::HashMap<String, usize>,
     std::collections::HashMap<String, Vec<f64>>,
     std::collections::HashMap<String, Vec<f64>>,
-)
-{
+) {
     eprintln!("Search! Collecting slices");
     let mut report = HashMap::new();
     let mut uniq_freqs = HashMap::new();
@@ -296,6 +298,111 @@ pub fn batch_search(
     }
 }
 
+pub fn per_read_search(
+    filename: String,
+    bigsi_map: indexmap::IndexMap<usize, bit_vec::BitVec>,
+    colors_accession: std::collections::HashMap<usize, String>,
+    ref_kmers_in: std::collections::HashMap<String, usize>,
+    bloom_size: usize,
+    num_hash: usize,
+    k: usize,
+) -> std::collections::HashMap<String, usize> {
+    let mut f = File::open(filename).expect("file not found");
+    let mut line_count = 1;
+    let mut false_positive_p = HashMap::new();
+    for (key, value) in ref_kmers_in {
+        false_positive_p.insert(
+            key,
+            false_prob(bloom_size as f64, num_hash as f64, value as f64),
+        );
+    }
+    let mut tax_map = HashMap::new();
+    let d = MultiGzDecoder::new(f);
+    for line in io::BufReader::new(d).lines() {
+        let l = line.unwrap();
+        if line_count % 4 == 2 {
+            let mut map = HashMap::new();
+            let l_r = kmer_fa::revcomp(&l);
+            let length_l = l.len();
+            if length_l < k {
+                continue;
+            } else {
+                for i in 0..l.len() - k + 1 {
+                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                        let count = map.entry(l[i..i + k].to_string()).or_insert(0);
+                        *count += 1;
+                    } else {
+                        let count = map.entry(l_r[length_l - (i + k)..length_l - i].to_string())
+                            .or_insert(0);
+                        *count += 1;
+                    }
+                }
+                let mut report = HashMap::new();
+                for (k, _) in &map {
+                    let mut kmer_slices = Vec::new();
+                    for i in 0..num_hash {
+                        let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
+                        let bi = bit_index as usize;
+                        if bigsi_map.contains_key(&bi) == false {
+                            let count = report.entry(String::from("No hits!")).or_insert(0);
+                            *count += 1;
+                            break;
+                        } else {
+                            kmer_slices.push(bigsi_map.get(&bi).unwrap());
+                        }
+                    }
+                    let mut first = kmer_slices[0].to_owned();
+                    for i in 1..num_hash {
+                        let j = i as usize;
+                        first.intersect(&kmer_slices[j]);
+                    }
+                    let mut hits = Vec::new();
+                    for i in 0..first.len() {
+                        if first[i] == true {
+                            hits.push(colors_accession.get(&i).unwrap());
+                        }
+                    }
+                    for h in &hits {
+                        let count = report.entry(h.to_string()).or_insert(0);
+                        *count += 1;
+                    }
+                }
+                //println!("{}", report.len());
+                let kmer_length = length_l - k + 1;
+                let mut count_vec: Vec<_> = report.iter().collect();
+                count_vec.sort_by(|a, b| b.1.cmp(a.1));
+                if count_vec.len() == 0 {
+                    let count = tax_map.entry("no_hits".to_string()).or_insert(0);
+                    *count += 1;
+                } else {
+                    let p_false = false_positive_p.get(&count_vec[0].0.to_owned()).unwrap();
+                    let distribution = Binomial::new(kmer_length, *p_false);
+                    let critical_value = kmer_length as f64 * p_false;
+                    let mpf = distribution.mass(count_vec[0].1.to_owned());
+                    if (count_vec[0].1.to_owned() as f64) < critical_value {
+                        let count = tax_map.entry("no_hits".to_string()).or_insert(0);
+                        *count += 1;
+                    } else if ((count_vec[0].1.to_owned() as f64) > critical_value)
+                        && (mpf >= 0.001)
+                    {
+                        let count = tax_map.entry("no_hits".to_string()).or_insert(0);
+                        *count += 1;
+                    } else {
+                        //println!("{} {} {}", count_vec[0].0.to_owned(), count_vec[0].1.to_owned(), length_l - k + 1);
+                        let count = tax_map.entry(count_vec[0].0.to_string()).or_insert(0);
+                        *count += 1;
+                    }
+                }
+                //line_count += 1;
+            }
+        }
+        line_count += 1;
+        //println!("{}", line_count);
+    }
+    tax_map
+}
+
+
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct BigsyMap {
     pub bloom_size: usize,
@@ -314,8 +421,7 @@ pub fn save_bigsi(
     num_hash_in: usize,
     k_size_in: usize,
     path: &str,
-)
-{
+) {
     let mut bigsi_map = HashMap::new();
     for (k, v) in bigsi {
         bigsi_map.insert(k, v.to_bytes());
@@ -341,8 +447,7 @@ pub fn save_bigsi_gz(
     num_hash_in: usize,
     k_size_in: usize,
     path: &str,
-)
-{
+) {
     let mut bigsi_map = HashMap::new();
     for (k, v) in bigsi {
         bigsi_map.insert(k, v.to_bytes());
@@ -541,4 +646,10 @@ pub fn generate_report_gene(
             println!("{}: {:.2}", k, gene_match);
         }
     }
+}
+
+pub fn false_prob(m: f64, k: f64, n: f64) -> f64 {
+    let e = std::f64::consts::E;
+    let prob = (1.0 - e.powf(-((k * (n + 0.5)) / (m - 1.0)))).powf(k);
+    prob
 }
