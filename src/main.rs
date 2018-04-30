@@ -7,8 +7,8 @@ use clap::{App, Arg, SubCommand};
 use std::time::SystemTime;
 
 fn main() {
-    let matches = App::new("bigsID")
-        .version("0.2")
+    let matches = App::new("bigs_id")
+        .version("0.3")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .subcommand(
