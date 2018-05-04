@@ -1,7 +1,6 @@
 extern crate bincode;
 extern crate bit_vec;
 extern crate flate2;
-extern crate indexmap;
 extern crate kmer_fa;
 extern crate murmurhash64;
 extern crate probability;
@@ -14,7 +13,6 @@ extern crate rayon;
 
 use probability::prelude::*;
 use std::collections::HashMap;
-use indexmap::IndexMap;
 use std::io;
 use std::io::prelude::*;
 use std::fs::File;
@@ -47,7 +45,7 @@ pub fn build_bigsi2(
     k_size: usize,
 ) -> (
     //std::collections::HashMap<usize, bit_vec::BitVec>,
-    indexmap::IndexMap<usize, bit_vec::BitVec>,
+    std::collections::HashMap<usize, Vec<u8>>,
     std::collections::HashMap<usize, String>,
     std::collections::HashMap<String, usize>,
 ) {
@@ -90,7 +88,7 @@ pub fn build_bigsi2(
         colors_accession.insert(c, s.to_string());
     }
     let num_taxa = accessions.len();
-    let mut bigsi_map = IndexMap::new();
+    let mut bigsi_map = HashMap::new();
     for i in 0..bloom_size {
         let mut bitvec = bit_vec::BitVec::from_elem(num_taxa, false);
         for (t, s) in &bit_map {
@@ -98,7 +96,7 @@ pub fn build_bigsi2(
                 bitvec.set(*accession_colors.get(&t.to_string()).unwrap(), true);
             }
         }
-        bigsi_map.insert(i, bitvec);
+        bigsi_map.insert(i, bitvec.to_bytes());
     }
     (bigsi_map, colors_accession, ref_kmer)
 }
@@ -108,7 +106,7 @@ pub fn build_bigsi2(
 //coverage per taxon
 pub fn search_bigsi(
     kmer_query: std::collections::HashMap<std::string::String, i32>,
-    bigsi_map: indexmap::IndexMap<usize, bit_vec::BitVec>,
+    bigsi_map: std::collections::HashMap<usize, Vec<u8>>,
     colors_accession: std::collections::HashMap<usize, String>,
     bloom_size: usize,
     num_hash: usize,
@@ -134,10 +132,10 @@ pub fn search_bigsi(
                 kmer_slices.push(bigsi_map.get(&bi).unwrap());
             }
         }
-        let mut first = kmer_slices[0].to_owned();
+        let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
         for i in 1..num_hash {
             let j = i as usize;
-            first.intersect(&kmer_slices[j]);
+            first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
         }
         let mut hits = Vec::new();
         for i in 0..first.len() {
@@ -170,7 +168,7 @@ pub fn search_bigsi(
 // to writing the search out
 pub fn batch_search(
     files: Vec<&str>,
-    bigsi_map: indexmap::IndexMap<usize, bit_vec::BitVec>,
+    bigsi_map: std::collections::HashMap<usize, Vec<u8>>,
     colors_accession: std::collections::HashMap<usize, String>,
     n_ref_kmers: std::collections::HashMap<String, usize>,
     bloom_size: usize,
@@ -204,10 +202,10 @@ pub fn batch_search(
                         kmer_slices.push(bigsi_map.get(&bi).unwrap());
                     }
                 }
-                let mut first = kmer_slices[0].to_owned();
+                let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
                 for i in 1..num_hash {
                     let j = i as usize;
-                    first.intersect(&kmer_slices[j]);
+                    first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
                 }
                 let mut hits = Vec::new();
                 for i in 0..first.len() {
@@ -266,10 +264,10 @@ pub fn batch_search(
                         kmer_slices.push(bigsi_map.get(&bi).unwrap());
                     }
                 }
-                let mut first = kmer_slices[0].to_owned();
+                let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
                 for i in 1..num_hash {
                     let j = i as usize;
-                    first.intersect(&kmer_slices[j]);
+                    first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
                 }
                 let mut hits = Vec::new();
                 for i in 0..first.len() {
@@ -301,7 +299,7 @@ pub fn batch_search(
 
 pub fn per_read_search(
     filename: String,
-    bigsi_map: indexmap::IndexMap<usize, bit_vec::BitVec>,
+    bigsi_map: std::collections::HashMap<usize, Vec<u8>>,
     colors_accession: std::collections::HashMap<usize, String>,
     ref_kmers_in: std::collections::HashMap<String, usize>,
     bloom_size: usize,
@@ -352,10 +350,10 @@ pub fn per_read_search(
                             kmer_slices.push(bigsi_map.get(&bi).unwrap());
                         }
                     }
-                    let mut first = kmer_slices[0].to_owned();
+                    let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
                     for i in 1..num_hash {
                         let j = i as usize;
-                        first.intersect(&kmer_slices[j]);
+                        first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
                     }
                     let mut hits = Vec::new();
                     for i in 0..first.len() {
@@ -421,7 +419,7 @@ pub struct BigsyMap {
 pub mod read_id_mt; 
 
 pub fn save_bigsi(
-    bigsi: indexmap::IndexMap<usize, bit_vec::BitVec>,
+    bigsi_map: std::collections::HashMap<usize, Vec<u8>>,
     colors_accession: std::collections::HashMap<usize, String>,
     n_ref_kmers_in: std::collections::HashMap<String, usize>,
     bloom_size_in: usize,
@@ -429,10 +427,6 @@ pub fn save_bigsi(
     k_size_in: usize,
     path: &str,
 ) {
-    let mut bigsi_map = HashMap::new();
-    for (k, v) in bigsi {
-        bigsi_map.insert(k, v.to_bytes());
-    }
     let mappy = BigsyMap {
         map: bigsi_map,
         colors: colors_accession,
@@ -447,7 +441,7 @@ pub fn save_bigsi(
 }
 
 pub fn save_bigsi_gz(
-    bigsi: indexmap::IndexMap<usize, bit_vec::BitVec>,
+    bigsi_map: std::collections::HashMap<usize, Vec<u8>>,
     colors_accession: std::collections::HashMap<usize, String>,
     n_ref_kmers_in: std::collections::HashMap<String, usize>,
     bloom_size_in: usize,
@@ -455,10 +449,6 @@ pub fn save_bigsi_gz(
     k_size_in: usize,
     path: &str,
 ) {
-    let mut bigsi_map = HashMap::new();
-    for (k, v) in bigsi {
-        bigsi_map.insert(k, v.to_bytes());
-    }
     let mappy = BigsyMap {
         map: bigsi_map,
         colors: colors_accession,
@@ -477,7 +467,7 @@ pub fn save_bigsi_gz(
 pub fn read_bigsi(
     path: &str,
 ) -> (
-    indexmap::IndexMap<usize, bit_vec::BitVec>,
+    std::collections::HashMap<usize, Vec<u8>>,
     std::collections::HashMap<usize, String>,
     std::collections::HashMap<String, usize>,
     usize,
@@ -488,12 +478,8 @@ pub fn read_bigsi(
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).expect("Can't read content");
     let deserialized: BigsyMap = deserialize(&contents[..]).expect("cant deserialize");
-    let mut bigsi_map = IndexMap::with_capacity(deserialized.map.len());
-    for (key, vector) in deserialized.map {
-        bigsi_map.insert(key, BitVec::from_bytes(&vector));
-    }
     (
-        bigsi_map,
+        deserialized.map,
         deserialized.colors,
         deserialized.n_ref_kmers,
         deserialized.bloom_size,
@@ -505,7 +491,7 @@ pub fn read_bigsi(
 pub fn read_bigsi_gz(
     path: &str,
 ) -> (
-    indexmap::IndexMap<usize, bit_vec::BitVec>,
+    std::collections::HashMap<usize, Vec<u8>>,
     std::collections::HashMap<usize, String>,
     std::collections::HashMap<String, usize>,
     usize,
@@ -517,12 +503,12 @@ pub fn read_bigsi_gz(
     let mut contents = Vec::new();
     gz.read_to_end(&mut contents);
     let deserialized: BigsyMap = deserialize(&contents[..]).expect("cant deserialize");
-    let mut bigsi_map = IndexMap::with_capacity(deserialized.map.len());
+    /*let mut bigsi_map = IndexMap::with_capacity(deserialized.map.len());
     for (key, vector) in deserialized.map {
         bigsi_map.insert(key, BitVec::from_bytes(&vector));
-    }
+    }*/
     (
-        bigsi_map,
+        deserialized.map,
         deserialized.colors,
         deserialized.n_ref_kmers,
         deserialized.bloom_size,

@@ -1,7 +1,6 @@
 extern crate flate2;
 extern crate murmurhash64;
 extern crate probability;  
-extern crate indexmap;
 extern crate kmer_fa;
 extern crate bit_vec;
 extern crate rayon;
@@ -15,7 +14,6 @@ use flate2::read::MultiGzDecoder;
 use std::fs::File;
 use probability::prelude::*;
 use std::collections::HashMap;
-use indexmap::IndexMap;
 use murmurhash64::murmur_hash64a;
 use bit_vec::BitVec;
 
@@ -45,7 +43,7 @@ pub fn false_prob(m: f64, k: f64, n: f64) -> f64 {
 
 pub fn per_read_search(
     filename: String,
-    bigsi_map: indexmap::IndexMap<usize, bit_vec::BitVec>,//has to be an Arc
+    bigsi_map: std::collections::HashMap<usize, Vec<u8>>,//has to be an Arc
     colors_accession: std::collections::HashMap<usize, String>,//has to be an Arc
     ref_kmers_in: std::collections::HashMap<String, usize>,
     bloom_size: usize,
@@ -61,7 +59,7 @@ pub fn per_read_search(
             false_prob(bloom_size as f64, num_hash as f64, value as f64),
         );
     }
-    let my_bigsi: Arc<indexmap::IndexMap<usize, bit_vec::BitVec>> = Arc::new(bigsi_map);
+    let my_bigsi: Arc<std::collections::HashMap<usize, Vec<u8>>> = Arc::new(bigsi_map);
     //let my_colors: Arc<std::collections::HashMap<usize, String>> = Arc::new(colors_accession);
     let false_positive_p_Arc: Arc<std::collections::HashMap<std::string::String, f64>> = Arc::new(false_positive_p.clone());
     let reads = nuc_reads_from_fq(&filename);
@@ -104,10 +102,10 @@ pub fn per_read_search(
                             kmer_slices.push(child_bigsi.get(&bi).unwrap());
                         }
                     }
-                    let mut first = kmer_slices[0].to_owned();
+                    let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
                     for i in 1..num_hash {
                         let j = i as usize;
-                        first.intersect(&kmer_slices[j]);
+                        first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
                     }
                     let mut hits = Vec::new();
                     for i in 0..first.len() {
