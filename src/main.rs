@@ -3,7 +3,7 @@ extern crate bigs_id;
 extern crate clap;
 extern crate kmer_fa;
 
-use clap::{App, Arg, SubCommand};
+use clap::{App, Arg, SubCommand, AppSettings};
 use std::time::SystemTime;
 
 fn main() {
@@ -11,6 +11,7 @@ fn main() {
         .version("0.3")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
+        .setting(AppSettings::ArgRequiredElseHelp)
         .subcommand(
             SubCommand::with_name("build")
                 .about("builds a bigsi")
@@ -73,66 +74,7 @@ fn main() {
         )
         .subcommand(
             SubCommand::with_name("search")
-                .about("does a bigsi search")
-                .version("0.1")
-                .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
-                .arg(
-                    Arg::with_name("bigsi")
-                        .short("b")
-                        .long("bigsi")
-                        .required(true)
-                        .takes_value(true),
-                )
-                .help(
-                              "                              -b, --bigsi=[FILE] 'Sets the name of the index file for search'
-                              -q, --query      'query file in fasta or fastq.gz format'
-                              -f, --filter     'Sets threshold to filter k-mers by frequency'
-                              -p, --p_shared        'minimum proportion of kmers shared with reference'
-                              -c, --compressed 'if set to 'true', will assume compressed index (default: false)'")
-                .arg(
-                    Arg::with_name("query")
-                        .help("query file (fastq.gz or fasta")
-                        .required(true)
-                        .short("q")
-                        .takes_value(true)
-                        .long("query"),
-                )
-                .arg(
-                    Arg::with_name("filter")
-                        .help("set minimum k-mer frequency ")
-                        .required(false)
-                        .short("f")
-                        .takes_value(true)
-                        .long("filter"),
-                )
-                .arg(
-                    Arg::with_name("shared_kmers")
-                        .help("set minimum proportion of shared k-mers with a reference")
-                        .required(false)
-                        .short("p")
-                        .takes_value(true)
-                        .long("p_shared"),
-                )
-                .arg(
-                    Arg::with_name("gene_search")
-                        .help("If set to 'true', the proportion of kmers from the query matching the entries in the index will be reported")
-                        .required(false)
-                        .short("g")
-                        .takes_value(true)
-                        .long("gene_search"),
-                )
-                .arg(
-                    Arg::with_name("compressed")
-                        .help("If set to 'true', it is assumed a gz compressed index is used")
-                        .required(false)
-                        .short("c")
-                        .takes_value(true)
-                        .long("compressed"),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("batch_search")
-                .about("does a bigsi search on a bunch of fastq.gz files")
+                .about("does a bigsi search on one or more fasta/fastq.gz files")
                 .version("0.1")
                 .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
                 .arg(
@@ -175,7 +117,7 @@ fn main() {
                 )
                 .arg(
                     Arg::with_name("gene_search")
-                        .help("If set to 'true', the proportion of kmers from the query matching the entries in the index will be reported")
+                        .help("If set('-g'), the proportion of kmers from the query matching the entries in the index will be reported")
                         .required(false)
                         .short("g")
                         .takes_value(true)
@@ -252,6 +194,14 @@ fn main() {
                         .short("c")
                         .takes_value(true)
                         .long("compressed"),
+                )
+                .arg(
+                    Arg::with_name("threads")
+                        .help("number of threads to use, if not set the maximum available threads will be used")
+                        .required(false)
+                        .short("t")
+                        .takes_value(true)
+                        .long("threads"),
                 ),
         )
         .get_matches();
@@ -297,88 +247,11 @@ fn main() {
         };
     }
     if let Some(matches) = matches.subcommand_matches("search") {
-        //read BIGSI
-        let filter = value_t!(matches, "filter", i32).unwrap_or(0);
-        let cov = value_t!(matches, "shared_kmers", f64).unwrap_or(0.35);
-        let gene_search = value_t!(matches, "gene_search", bool).unwrap_or(false);
-        let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
-        let bigsi_time = SystemTime::now();
-        eprintln!("Reading BIGSI");
-        let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
-            if compressed == false {
-                bigs_id::read_bigsi(matches.value_of("bigsi").unwrap())
-            } else {
-                bigs_id::read_bigsi_gz(matches.value_of("bigsi").unwrap())
-            };
-        match bigsi_time.elapsed() {
-            Ok(elapsed) => {
-                eprintln!("Index read in {} seconds", elapsed.as_secs());
-            }
-            Err(e) => {
-                // an error occurred!
-                eprintln!("Error: {:?}", e);
-            }
-        }
-        let quersy_in = matches.value_of("query").unwrap();
-        if quersy_in.ends_with("gz") {
-            let unfiltered = kmer_fa::kmers_from_fq(quersy_in.to_owned(), k_size);
-            let kmers_query = kmer_fa::clean_map(unfiltered, filter);
-            let num_kmers = kmers_query.len() as f64;
-            println!("{} k-mers in query", num_kmers);
-            let bigsi_search = SystemTime::now();
-            let (report, freqs, _multi_freqs) = bigs_id::search_bigsi(
-                kmers_query,
-                bigsi_map,
-                colors_accession,
-                bloom_size,
-                num_hash,
-            );
-
-            bigs_id::generate_report(report, freqs, n_ref_kmers, cov);
-            match bigsi_search.elapsed() {
-                Ok(elapsed) => {
-                    eprintln!("Search completed in {} seconds.", elapsed.as_secs());
-                }
-                Err(e) => {
-                    // an error occurred!
-                    eprintln!("Error: {:?}", e);
-                }
-            }
-        } else {
-            let vec_query = kmer_fa::read_fasta(quersy_in.to_owned());
-            let unfiltered = kmer_fa::kmerize_vector(vec_query, k_size);
-            let kmers_query = kmer_fa::clean_map(unfiltered, filter);
-            let num_kmers = kmers_query.len() as f64;
-            println!("{} k-mers in query", num_kmers);
-            let bigsi_search = SystemTime::now();
-            let (report, freqs, _multi_freqs) = bigs_id::search_bigsi(
-                kmers_query,
-                bigsi_map,
-                colors_accession,
-                bloom_size,
-                num_hash,
-            );
-            if gene_search == false {
-                bigs_id::generate_report(report.to_owned(), freqs, n_ref_kmers, cov);
-            } else {
-                bigs_id::generate_report_gene(report, num_kmers as usize);
-            }
-            match bigsi_search.elapsed() {
-                Ok(elapsed) => {
-                    eprintln!("Search completed in {} seconds.", elapsed.as_secs());
-                }
-                Err(e) => {
-                    // an error occurred!
-                    eprintln!("Error: {:?}", e);
-                }
-            }
-        }
-    }
-    if let Some(matches) = matches.subcommand_matches("batch_search") {
         let files: Vec<_> = matches.values_of("query").unwrap().collect();
         let filter = value_t!(matches, "filter", i32).unwrap_or(0);
         let cov = value_t!(matches, "shared_kmers", f64).unwrap_or(0.35);
-        let gene_search = value_t!(matches, "gene_search", bool).unwrap_or(false);
+        let gene_search = matches.is_present("gene");
+        //let gene_search = value_t!(matches, "gene_search", bool).unwrap_or(false);
         let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
         let bigsi_time = SystemTime::now();
         eprintln!("Loading index");
@@ -449,6 +322,7 @@ fn main() {
         let bigsi_time = SystemTime::now();
         let fq = matches.value_of("query").unwrap();
         let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
+        let threads = value_t!(matches, "threads", usize).unwrap_or(0);
         eprintln!("Loading index");
         let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
             if compressed == false {
@@ -465,7 +339,7 @@ fn main() {
                 eprintln!("Error: {:?}", e);
             }
         }
-        let tax_map = bigs_id::per_read_search(
+        let tax_map = bigs_id::read_id_mt::per_read_search(
             fq.to_string(),
             bigsi_map,
             colors_accession,
@@ -473,6 +347,7 @@ fn main() {
             bloom_size,
             num_hash,
             k_size,
+            threads,
         );
         for (k, v) in tax_map {
             println!("{}: {}", k, v);

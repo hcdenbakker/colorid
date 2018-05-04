@@ -1,5 +1,3 @@
-#[macro_use]
-extern crate serde_derive;
 extern crate bincode;
 extern crate bit_vec;
 extern crate flate2;
@@ -8,8 +6,11 @@ extern crate kmer_fa;
 extern crate murmurhash64;
 extern crate probability;
 extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate serde_json;
 extern crate simple_bloom;
+extern crate rayon;
 
 use probability::prelude::*;
 use std::collections::HashMap;
@@ -397,11 +398,15 @@ pub fn per_read_search(
             }
         }
         line_count += 1;
+        if line_count % 400000 == 0 {
+            eprint!("Classified {} reads\r", line_count / 4);
+        }
         //println!("{}", line_count);
     }
+    eprint!("Classified {} reads\r", line_count / 4);
+    eprint!("\n");
     tax_map
 }
-
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct BigsyMap {
@@ -412,6 +417,8 @@ pub struct BigsyMap {
     pub map: HashMap<usize, Vec<u8>>,
     pub n_ref_kmers: HashMap<String, usize>,
 }
+
+pub mod read_id_mt; 
 
 pub fn save_bigsi(
     bigsi: indexmap::IndexMap<usize, bit_vec::BitVec>,
