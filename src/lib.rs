@@ -488,7 +488,7 @@ pub fn read_bigsi(
     let mut contents = Vec::new();
     file.read_to_end(&mut contents).expect("Can't read content");
     let deserialized: BigsyMap = deserialize(&contents[..]).expect("cant deserialize");
-    let mut bigsi_map = IndexMap::new();
+    let mut bigsi_map = IndexMap::with_capacity(deserialized.map.len());
     for (key, vector) in deserialized.map {
         bigsi_map.insert(key, BitVec::from_bytes(&vector));
     }
@@ -517,7 +517,7 @@ pub fn read_bigsi_gz(
     let mut contents = Vec::new();
     gz.read_to_end(&mut contents);
     let deserialized: BigsyMap = deserialize(&contents[..]).expect("cant deserialize");
-    let mut bigsi_map = IndexMap::new();
+    let mut bigsi_map = IndexMap::with_capacity(deserialized.map.len());
     for (key, vector) in deserialized.map {
         bigsi_map.insert(key, BitVec::from_bytes(&vector));
     }
