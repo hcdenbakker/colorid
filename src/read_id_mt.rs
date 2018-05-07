@@ -65,11 +65,9 @@ pub fn per_read_search(
     let reads = nuc_reads_from_fq(&filename);
     let mut tax_map = HashMap::new();
     let mut c: Vec<_> = vec![];
-    c = reads.par_iter().map(|l| //).collect();
+    c = reads.par_iter().map(|l|
             {
-            //let mut count = "";     
             let child_bigsi = my_bigsi.clone();
-            //let child_colors = my_colors.clone();
             let child_fp = false_positive_p_Arc.clone();
             let mut map = HashMap::new();
             let mut report = HashMap::new();
@@ -88,15 +86,14 @@ pub fn per_read_search(
                         *count += 1;
                     }
                 }
-                //let mut report = HashMap::new();
+                let empty_bitvec = bit_vec::BitVec::from_elem(child_fp.len(), false).to_bytes();
                 for (k, _) in &map {
                     let mut kmer_slices = Vec::new();
                     for i in 0..num_hash {
                         let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
                                                 let bi = bit_index as usize;
-                        if child_bigsi.contains_key(&bi) == false {
-                            let count = report.entry("No hits!").or_insert(0);
-                            *count += 1;
+                        if (child_bigsi.contains_key(&bi) == false) || (child_bigsi[&bi] == empty_bitvec){
+                            *report.entry("No hits!").or_insert(0) += 1;
                             break;
                         } else {
                             kmer_slices.push(child_bigsi.get(&bi).unwrap());
@@ -107,28 +104,22 @@ pub fn per_read_search(
                         let j = i as usize;
                         first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
                     }
-                    let mut hits = Vec::new();
-                    for i in 0..first.len() {
-                        if first[i] == true {
-                            let h = colors_accession.get(&i).unwrap();
-                            hits.push(h);
+                    let mut color = 0;
+                    for i in first{
+                        if i ==true{
+                            *report.entry(colors_accession.get(&color).unwrap()).or_insert(0) += 1;
                         }
-                    }
-                    for h in &hits {
-                        let count = report.entry(h).or_insert(0);
-                        //let count = report.entry(h.to_string()).or_insert(0);
-                        *count += 1;
+                        color += 1;
                     }
                 }
-                //println!("{}", report.len());
                 let kmer_length = length_l - k + 1;
                 let mut count_vec: Vec<_> = report.iter().collect();
                 count_vec.sort_by(|a, b| b.1.cmp(a.1));
                 if count_vec.len() == 0 {
                     return "no_hits";
                 } else {
-                    let top_hit = count_vec[0].0.to_owned();
-                    let p_false = child_fp.get(top_hit).unwrap();
+                    let top_hit = count_vec[0].0;
+                    let p_false = child_fp.get(*top_hit).unwrap();
                     let distribution = Binomial::new(kmer_length, *p_false);
                     let critical_value = kmer_length as f64 * p_false;
                     let mpf = distribution.mass(count_vec[0].1.to_owned());
@@ -139,13 +130,10 @@ pub fn per_read_search(
                     {
                         return "no_hits";
                     } else {
-                        //println!("{} {} {}", count_vec[0].0.to_owned(), count_vec[0].1.to_owned(), length_l - k + 1);
-                        //let s = count_vec[0].0.to_string();
                         return top_hit;
                     }
                 }
             }
-            //count
     }).collect();
     eprint!("Classified {} reads\r", c.len());
     eprint!("\n");
