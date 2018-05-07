@@ -120,7 +120,7 @@ fn main() {
                         .help("If set('-g'), the proportion of kmers from the query matching the entries in the index will be reported")
                         .required(false)
                         .short("g")
-                        .takes_value(true)
+                        .takes_value(false)
                         .long("gene_search"),
                 )
                 .arg(
@@ -250,7 +250,7 @@ fn main() {
         let files: Vec<_> = matches.values_of("query").unwrap().collect();
         let filter = value_t!(matches, "filter", i32).unwrap_or(0);
         let cov = value_t!(matches, "shared_kmers", f64).unwrap_or(0.35);
-        let gene_search = matches.is_present("gene");
+        let gene_search = matches.is_present("gene_search");
         //let gene_search = value_t!(matches, "gene_search", bool).unwrap_or(false);
         let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
         let bigsi_time = SystemTime::now();
@@ -270,7 +270,7 @@ fn main() {
                 eprintln!("Error: {:?}", e);
             }
         }
-        bigs_id::batch_search(
+        bigs_id::new_search::batch_search(
             files,
             bigsi_map,
             colors_accession,

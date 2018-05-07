@@ -50,11 +50,11 @@ pub fn build_bigsi2(
     std::collections::HashMap<String, usize>,
 ) {
     //get a hash map with taxa and bit vector from bloom filter
-    let mut bit_map = HashMap::new();
-    let mut ref_kmer = HashMap::new();
-    let mut accessions = Vec::new();
-    let mut counter = 1;
     let map_length = map.len();
+    let mut bit_map = HashMap::with_capacity(map_length);
+    let mut ref_kmer = HashMap::with_capacity(map_length);
+    let mut accessions = Vec::with_capacity(map_length);
+    let mut counter = 1;
     for (accession, v) in &map {
         eprintln!("Adding {} to index ({}/{})", accession, counter, map_length);
         counter += 1;
@@ -81,14 +81,15 @@ pub fn build_bigsi2(
         accessions.push(accession);
     }
     //create hash table with colors for accessions
-    let mut accession_colors = HashMap::new();
-    let mut colors_accession = HashMap::new();
+    let num_taxa = accessions.len();
+    let mut accession_colors = HashMap::with_capacity(accessions.len());
+    let mut colors_accession = HashMap::with_capacity(accessions.len());
     for (c, s) in accessions.iter().enumerate() {
         accession_colors.insert(s.to_string(), c);
         colors_accession.insert(c, s.to_string());
     }
-    let num_taxa = accessions.len();
-    let mut bigsi_map = HashMap::new();
+    //create actual index, the most straight forward way, but not very efficient
+    let mut bigsi_map = HashMap::with_capacity(bloom_size);
     for i in 0..bloom_size {
         let mut bitvec = bit_vec::BitVec::from_elem(num_taxa, false);
         for (t, s) in &bit_map {
@@ -296,6 +297,8 @@ pub fn batch_search(
         }
     }
 }
+
+pub mod new_search;
 
 pub fn per_read_search(
     filename: String,
