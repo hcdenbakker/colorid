@@ -1,8 +1,8 @@
-extern crate flate2;
-extern crate murmurhash64;
-extern crate probability;  
-extern crate kmer_fa;
 extern crate bit_vec;
+extern crate flate2;
+extern crate kmer_fa;
+extern crate murmurhash64;
+extern crate probability;
 extern crate rayon;
 
 use rayon::prelude::*;
@@ -16,16 +16,17 @@ use probability::prelude::*;
 use std::collections::HashMap;
 use murmurhash64::murmur_hash64a;
 use bit_vec::BitVec;
+use std::time::SystemTime;
 
-pub fn nuc_reads_from_fq(filename: &str) -> Vec<String>{
-   let mut f = File::open(filename).expect("file not found");
-   let mut vec = Vec::new();
-   let mut line_count = 1;
-   let d = MultiGzDecoder::new(f);
-   for line in io::BufReader::new(d).lines() {
-       let l =  line.unwrap();
-       if line_count%4 == 2 {
-        vec.push(l);
+pub fn nuc_reads_from_fq(filename: &str) -> Vec<String> {
+    let mut f = File::open(filename).expect("file not found");
+    let mut vec = Vec::new();
+    let mut line_count = 1;
+    let d = MultiGzDecoder::new(f);
+    for line in io::BufReader::new(d).lines() {
+        let l = line.unwrap();
+        if line_count % 4 == 2 {
+            vec.push(l);
         }
 
         line_count += 1;
@@ -40,18 +41,20 @@ pub fn false_prob(m: f64, k: f64, n: f64) -> f64 {
     prob
 }
 
-
 pub fn per_read_search(
     filename: String,
-    bigsi_map: std::collections::HashMap<usize, Vec<u8>>,//has to be an Arc
-    colors_accession: std::collections::HashMap<usize, String>,//has to be an Arc
+    bigsi_map: std::collections::HashMap<usize, Vec<u8>>, //has to be an Arc
+    colors_accession: std::collections::HashMap<usize, String>, //has to be an Arc
     ref_kmers_in: std::collections::HashMap<String, usize>,
     bloom_size: usize,
     num_hash: usize,
     k: usize,
     t: usize,
 ) -> std::collections::HashMap<std::string::String, usize> {
-    rayon::ThreadPoolBuilder::new().num_threads(t).build_global().unwrap();
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(t)
+        .build_global()
+        .unwrap();
     let mut false_positive_p = HashMap::new();
     for (key, value) in ref_kmers_in {
         false_positive_p.insert(
@@ -61,12 +64,19 @@ pub fn per_read_search(
     }
     let my_bigsi: Arc<std::collections::HashMap<usize, Vec<u8>>> = Arc::new(bigsi_map);
     //let my_colors: Arc<std::collections::HashMap<usize, String>> = Arc::new(colors_accession);
-    let false_positive_p_Arc: Arc<std::collections::HashMap<std::string::String, f64>> = Arc::new(false_positive_p.clone());
-    let reads = nuc_reads_from_fq(&filename);
+    let false_positive_p_Arc: Arc<std::collections::HashMap<std::string::String, f64>> =
+        Arc::new(false_positive_p.clone());
+    let reads: Vec<String> = if filename.ends_with("gz") {
+        nuc_reads_from_fq(&filename)
+    } else {
+        kmer_fa::read_fasta(filename)
+    };
+    let search_time = SystemTime::now();
     let mut tax_map = HashMap::new();
     let mut c: Vec<_> = vec![];
-    c = reads.par_iter().map(|l|
-            {
+    c = reads
+        .par_iter()
+        .map(|l| {
             let child_bigsi = my_bigsi.clone();
             let child_fp = false_positive_p_Arc.clone();
             let mut map = HashMap::new();
@@ -91,8 +101,10 @@ pub fn per_read_search(
                     let mut kmer_slices = Vec::new();
                     for i in 0..num_hash {
                         let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
-                                                let bi = bit_index as usize;
-                        if (child_bigsi.contains_key(&bi) == false) || (child_bigsi[&bi] == empty_bitvec){
+                        let bi = bit_index as usize;
+                        if (child_bigsi.contains_key(&bi) == false)
+                            || (child_bigsi[&bi] == empty_bitvec)
+                        {
                             *report.entry("No hits!").or_insert(0) += 1;
                             break;
                         } else {
@@ -105,9 +117,11 @@ pub fn per_read_search(
                         first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
                     }
                     let mut color = 0;
-                    for i in first{
-                        if i ==true{
-                            *report.entry(colors_accession.get(&color).unwrap()).or_insert(0) += 1;
+                    for i in first {
+                        if i == true {
+                            *report
+                                .entry(colors_accession.get(&color).unwrap())
+                                .or_insert(0) += 1;
                         }
                         color += 1;
                     }
@@ -134,12 +148,24 @@ pub fn per_read_search(
                     }
                 }
             }
-    }).collect();
-    eprint!("Classified {} reads\r", c.len());
-    eprint!("\n");
-    for id in c{
+        })
+        .collect();
+    match search_time.elapsed() {
+        Ok(elapsed) => {
+            eprintln!(
+                "Classified {} reads in {} seconds",
+                c.len(),
+                elapsed.as_secs()
+            );
+        }
+        Err(e) => {
+            // an error occurred!
+            eprintln!("Error: {:?}", e);
+        }
+    }
+    for id in c {
         let count = tax_map.entry(id.to_string()).or_insert(0);
-            *count += 1;
+        *count += 1;
     }
     tax_map
 }

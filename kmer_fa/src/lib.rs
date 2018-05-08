@@ -24,13 +24,20 @@ pub fn read_fasta(filename: String) -> Vec<String> {
     let mut count_line = 0;
     for line in vec_raw {
         count_line += 1;
-        if line.contains('>') || count_line == length_raw_vec {
+        if line.contains('>'){
             let l = sub_string.to_string();
             if l.len() > 0 {
                 vec.push(l);
             }
             sub_string.clear();
-        } else {
+        } else if count_line == length_raw_vec{
+            let l = line.to_string();
+            sub_string.push_str(&l);
+            let l = sub_string.to_string();
+            if l.len() > 0 {
+                vec.push(l);
+            }
+        } else{
             let l = line.to_string();
             sub_string.push_str(&l);
         }
