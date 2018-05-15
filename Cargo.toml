@@ -1,13 +1,13 @@
 [package]
 name = "bigs_id"
-version = "0.1.0"
+version = "0.4.0"
 authors = ["henk"]
 
 [dependencies]
 clap = "2.30.0"
 simple_bloom = { path = "./simple_bloom" }
 kmer_fa = { path = "./kmer_fa" }
-bit-vec = "0.4.3"
+bit-vec = "0.5.0"
 murmurhash64 = "0.3.1"
 serde = "1.0.27"
 serde_json = "1.0.9"

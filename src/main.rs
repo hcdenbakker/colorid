@@ -3,12 +3,12 @@ extern crate bigs_id;
 extern crate clap;
 extern crate kmer_fa;
 
-use clap::{App, Arg, SubCommand, AppSettings};
+use clap::{App, AppSettings, Arg, SubCommand};
 use std::time::SystemTime;
 
 fn main() {
     let matches = App::new("bigs_id")
-        .version("0.3")
+        .version("0.4")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .setting(AppSettings::ArgRequiredElseHelp)
@@ -62,6 +62,14 @@ fn main() {
                         .short("s")
                         .takes_value(true)
                         .long("bloom"),
+                )
+                .arg(
+                    Arg::with_name("threads")
+                        .help("number of threads to use, if not set one thread will be used")
+                        .required(false)
+                        .short("t")
+                        .takes_value(true)
+                        .long("threads"),
                 )
                 .arg(
                     Arg::with_name("compressed")
@@ -202,6 +210,14 @@ fn main() {
                         .short("t")
                         .takes_value(true)
                         .long("threads"),
+                )
+                .arg(
+                    Arg::with_name("fp_correct")
+                        .help("parameter to correct for false positives, default 0.001, maybe increased for larger searches")
+                        .required(false)
+                        .short("p")
+                        .takes_value(true)
+                        .long("fp_correct"),
                 ),
         )
         .get_matches();
@@ -215,16 +231,16 @@ fn main() {
             matches.value_of("num_hashes").unwrap(),
             matches.value_of("length_bloom").unwrap()
         );
-        println!("Building BIGSI.");
         let kmer = value_t!(matches, "k-mer_size", usize).unwrap_or(31);
-        let bloom = value_t!(matches, "length_bloom", usize).unwrap_or(50000000);
+        let bloom = value_t!(matches, "length_bloom", usize).unwrap_or(50_000_000);
         let hashes = value_t!(matches, "num_hashes", usize).unwrap_or(4);
+        let threads = value_t!(matches, "threads", usize).unwrap_or(1);
         let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
         let map = bigs_id::tab_to_map(matches.value_of("ref_file").unwrap().to_string());
         let (bigsi_map, colors_accession, n_ref_kmers) =
-            bigs_id::build_bigsi2(map, bloom, hashes, kmer);
+            bigs_id::build_mt::build_bigsi(&map, bloom, hashes, kmer, threads);
         println!("Saving BIGSI to file.");
-        if compressed == false {
+        if !compressed {
             bigs_id::save_bigsi(
                 bigsi_map.to_owned(),
                 colors_accession.to_owned(),
@@ -251,12 +267,11 @@ fn main() {
         let filter = value_t!(matches, "filter", i32).unwrap_or(0);
         let cov = value_t!(matches, "shared_kmers", f64).unwrap_or(0.35);
         let gene_search = matches.is_present("gene_search");
-        //let gene_search = value_t!(matches, "gene_search", bool).unwrap_or(false);
         let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
         let bigsi_time = SystemTime::now();
         eprintln!("Loading index");
         let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
-            if compressed == false {
+            if !compressed {
                 bigs_id::read_bigsi(matches.value_of("bigsi").unwrap())
             } else {
                 bigs_id::read_bigsi_gz(matches.value_of("bigsi").unwrap())
@@ -270,11 +285,11 @@ fn main() {
                 eprintln!("Error: {:?}", e);
             }
         }
-        bigs_id::new_search::batch_search(
+        bigs_id::batch_search(
             files,
-            bigsi_map,
-            colors_accession,
-            n_ref_kmers,
+            &bigsi_map,
+            &colors_accession,
+            &n_ref_kmers,
             bloom_size,
             num_hash,
             k_size,
@@ -288,7 +303,7 @@ fn main() {
         let bigsi_time = SystemTime::now();
         eprintln!("Loading index");
         let (_bigsi_map, colors_accession, _n_ref_kmers, bloom_size, num_hash, k_size) =
-            if compressed == false {
+            if !compressed {
                 bigs_id::read_bigsi(matches.value_of("bigsi").unwrap())
             } else {
                 bigs_id::read_bigsi_gz(matches.value_of("bigsi").unwrap())
@@ -323,9 +338,10 @@ fn main() {
         let fq = matches.value_of("query").unwrap();
         let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
         let threads = value_t!(matches, "threads", usize).unwrap_or(0);
+        let fp_correct = value_t!(matches, "fp_correct", f64).unwrap_or(0.001);
         eprintln!("Loading index");
         let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
-            if compressed == false {
+            if !compressed {
                 bigs_id::read_bigsi(matches.value_of("bigsi").unwrap())
             } else {
                 bigs_id::read_bigsi_gz(matches.value_of("bigsi").unwrap())
@@ -342,12 +358,13 @@ fn main() {
         let tax_map = bigs_id::read_id_mt::per_read_search(
             fq.to_string(),
             bigsi_map,
-            colors_accession,
-            n_ref_kmers,
+            &colors_accession,
+            &n_ref_kmers,
             bloom_size,
             num_hash,
             k_size,
             threads,
+            fp_correct,
         );
         for (k, v) in tax_map {
             println!("{}: {}", k, v);
