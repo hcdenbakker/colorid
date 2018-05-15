@@ -304,8 +304,6 @@ pub fn batch_search(
     }
 }
 
-pub mod new_search;
-
 pub mod build_mt;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
