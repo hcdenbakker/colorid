@@ -30,7 +30,8 @@ fn main() {
                               -k, --kmer      'sets kmer size to use for index'
                               -n, --num_hashes  'number of hashes to use for bloom filters'
                               -s, --bloom     'size bloom filter'
-                              -c, --compressed 'if set to 'true', will create a compressed index (default: false)'")
+                              -c, --compressed 'if set to 'true', will create a compressed index (default: false)'
+                              -t, --threads 'sets number of threads, if set to 0, takes as many threads as it can get, default 1'")
                 .arg(
                     Arg::with_name("ref_file")
                         .help("Sets the input file to use")
@@ -237,8 +238,11 @@ fn main() {
         let threads = value_t!(matches, "threads", usize).unwrap_or(1);
         let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
         let map = bigs_id::tab_to_map(matches.value_of("ref_file").unwrap().to_string());
-        let (bigsi_map, colors_accession, n_ref_kmers) =
-            bigs_id::build_mt::build_bigsi(&map, bloom, hashes, kmer, threads);
+        let (bigsi_map, colors_accession, n_ref_kmers) = if threads == 1{
+            bigs_id::build_bigsi2(&map, bloom, hashes, kmer)
+        }else{
+            bigs_id::build_mt::build_bigsi(&map, bloom, hashes, kmer, threads)
+        };
         println!("Saving BIGSI to file.");
         if !compressed {
             bigs_id::save_bigsi(
