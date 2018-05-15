@@ -4,42 +4,40 @@ extern crate flate2;
 extern crate kmer_fa;
 extern crate murmurhash64;
 extern crate probability;
+extern crate rayon;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
 extern crate simple_bloom;
-extern crate rayon;
 
-use probability::prelude::*;
-use std::collections::HashMap;
-use std::io;
-use std::io::prelude::*;
-use std::fs::File;
-use simple_bloom::BloomFilter;
-use murmurhash64::murmur_hash64a;
-use bit_vec::BitVec;
-use std::io::Write;
-use flate2::read::GzDecoder;
-use std::time::SystemTime;
-use flate2::Compression;
-use flate2::write::GzEncoder;
 use bincode::{deserialize, serialize, Infinite};
-use flate2::read::MultiGzDecoder;
+use bit_vec::BitVec;
+use flate2::Compression;
+use flate2::read::GzDecoder;
+use flate2::write::GzEncoder;
+use murmurhash64::murmur_hash64a;
+use simple_bloom::BloomFilter;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io;
+use std::io::Write;
+use std::io::prelude::*;
+use std::time::SystemTime;
 
 pub fn tab_to_map(filename: String) -> std::collections::HashMap<std::string::String, String> {
     let mut map = HashMap::new();
     let f = File::open(filename).expect("reference file not found");
     for line in io::BufReader::new(f).lines() {
         let l = line.unwrap();
-        let v: Vec<&str> = l.split("\t").collect();
+        let v: Vec<&str> = l.split('\t').collect();
         map.insert(String::from(v[0]), String::from(v[1]));
     }
     map
 }
 
 pub fn build_bigsi2(
-    map: std::collections::HashMap<std::string::String, String>,
+    map: &std::collections::HashMap<std::string::String, String>,
     bloom_size: usize,
     num_hash: usize,
     k_size: usize,
@@ -55,14 +53,14 @@ pub fn build_bigsi2(
     let mut ref_kmer = HashMap::with_capacity(map_length);
     let mut accessions = Vec::with_capacity(map_length);
     let mut counter = 1;
-    for (accession, v) in &map {
+    for (accession, v) in map {
         eprintln!("Adding {} to index ({}/{})", accession, counter, map_length);
         counter += 1;
         if v.ends_with("gz") {
             let unfiltered = kmer_fa::kmers_from_fq(v.to_owned(), k_size);
             let kmers = kmer_fa::clean_map(unfiltered, 1);
             let mut filter = BloomFilter::new(bloom_size as usize, num_hash as usize);
-            for (kmer, _) in &kmers {
+            for kmer in kmers.keys() {
                 filter.insert(&kmer);
             }
             bit_map.insert(accession, filter.bits);
@@ -71,13 +69,13 @@ pub fn build_bigsi2(
             let kmers = kmer_fa::kmerize_vector(vec, k_size);
             ref_kmer.insert(accession.to_string(), kmers.len());
             let mut filter = BloomFilter::new(bloom_size as usize, num_hash as usize);
-            for (kmer, _) in &kmers {
+            for kmer in kmers.keys() {
                 filter.insert(&kmer);
             }
             bit_map.insert(accession, filter.bits);
         }
     }
-    for (accession, _) in &map {
+    for accession in map.keys() {
         accessions.push(accession);
     }
     //create hash table with colors for accessions
@@ -89,15 +87,19 @@ pub fn build_bigsi2(
         colors_accession.insert(c, s.to_string());
     }
     //create actual index, the most straight forward way, but not very efficient
-    let mut bigsi_map = HashMap::with_capacity(bloom_size);
+    let mut bigsi_map = HashMap::new();
     for i in 0..bloom_size {
         let mut bitvec = bit_vec::BitVec::from_elem(num_taxa, false);
         for (t, s) in &bit_map {
-            if s[i] == true {
-                bitvec.set(*accession_colors.get(&t.to_string()).unwrap(), true);
+            if s[i] {
+                bitvec.set(accession_colors[&t.to_string()], true);
             }
         }
-        bigsi_map.insert(i, bitvec.to_bytes());
+        if bitvec.none() {
+            continue;
+        } else {
+            bigsi_map.insert(i, bitvec.to_bytes());
+        }
     }
     (bigsi_map, colors_accession, ref_kmer)
 }
@@ -106,9 +108,9 @@ pub fn build_bigsi2(
 //add a hashmap with vectors containing k-mer coverages of uniquely placed k-mers to estimate
 //coverage per taxon
 pub fn search_bigsi(
-    kmer_query: std::collections::HashMap<std::string::String, i32>,
-    bigsi_map: std::collections::HashMap<usize, Vec<u8>>,
-    colors_accession: std::collections::HashMap<usize, String>,
+    kmer_query: &std::collections::HashMap<std::string::String, i32>,
+    bigsi_map: &std::collections::HashMap<usize, Vec<u8>>,
+    colors_accession: &std::collections::HashMap<usize, String>,
     bloom_size: usize,
     num_hash: usize,
 ) -> (
@@ -120,17 +122,17 @@ pub fn search_bigsi(
     let mut report = HashMap::new();
     let mut uniq_freqs = HashMap::new();
     let mut multi_freqs = HashMap::new();
-    for (k, _) in &kmer_query {
+    for kmer in kmer_query.keys() {
         let mut kmer_slices = Vec::new();
         for i in 0..num_hash {
-            let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
+            let bit_index = murmur_hash64a(kmer.as_bytes(), i as u64) % bloom_size as u64;
             let bi = bit_index as usize;
-            if bigsi_map.contains_key(&bi) == false {
+            if !bigsi_map.contains_key(&bi) {
                 let count = report.entry(String::from("No hits!")).or_insert(0);
                 *count += 1;
                 break;
             } else {
-                kmer_slices.push(bigsi_map.get(&bi).unwrap());
+                kmer_slices.push(&bigsi_map[&bi]);
             }
         }
         let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
@@ -140,25 +142,25 @@ pub fn search_bigsi(
         }
         let mut hits = Vec::new();
         for i in 0..first.len() {
-            if first[i] == true {
-                hits.push(colors_accession.get(&i).unwrap());
+            if first[i] {
+                hits.push(&colors_accession[&i]);
             }
         }
         for h in &hits {
             let count = report.entry(h.to_string()).or_insert(0);
             *count += 1;
-            let value = *kmer_query.get(&k.to_string()).unwrap() as f64;
+            let value = f64::from(kmer_query[&kmer.to_string()]);
             multi_freqs
                 .entry(h.to_string())
-                .or_insert(Vec::new())
+                .or_insert_with(Vec::new)
                 .push(value);
         }
         if hits.len() == 1 {
             let key = hits[0];
-            let value = *kmer_query.get(&k.to_string()).unwrap() as f64;
+            let value = f64::from(kmer_query[&kmer.to_string()]);
             uniq_freqs
                 .entry(key.to_string())
-                .or_insert(Vec::new())
+                .or_insert_with(Vec::new)
                 .push(value);
         }
     }
@@ -169,9 +171,9 @@ pub fn search_bigsi(
 // to writing the search out
 pub fn batch_search(
     files: Vec<&str>,
-    bigsi_map: std::collections::HashMap<usize, Vec<u8>>,
-    colors_accession: std::collections::HashMap<usize, String>,
-    n_ref_kmers: std::collections::HashMap<String, usize>,
+    bigsi_map: &std::collections::HashMap<usize, Vec<u8>>,
+    colors_accession: &std::collections::HashMap<usize, String>,
+    n_ref_kmers: &std::collections::HashMap<String, usize>,
     bloom_size: usize,
     num_hash: usize,
     k_size: usize,
@@ -190,41 +192,43 @@ pub fn batch_search(
             let bigsi_search = SystemTime::now();
             let mut report = HashMap::new();
             let mut uniq_freqs = HashMap::new();
-            for (k, _) in &kmers_query {
+            for k in kmers_query.keys() {
                 let mut kmer_slices = Vec::new();
                 for i in 0..num_hash {
                     let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
                     let bi = bit_index as usize;
-                    if bigsi_map.contains_key(&bi) == false {
-                        let count = report.entry(String::from("No hits!")).or_insert(0);
-                        *count += 1;
+                    if !bigsi_map.contains_key(&bi) {
                         break;
                     } else {
-                        kmer_slices.push(bigsi_map.get(&bi).unwrap());
+                        kmer_slices.push(&bigsi_map[&bi]);
                     }
                 }
-                let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
-                for i in 1..num_hash {
-                    let j = i as usize;
-                    first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
-                }
-                let mut hits = Vec::new();
-                for i in 0..first.len() {
-                    if first[i] == true {
-                        hits.push(colors_accession.get(&i).unwrap());
+                if kmer_slices.len() < num_hash {
+                    continue;
+                } else {
+                    let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
+                    for i in 1..num_hash {
+                        let j = i as usize;
+                        first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
                     }
-                }
-                for h in &hits {
-                    let count = report.entry(h.to_string()).or_insert(0);
-                    *count += 1;
-                }
-                if hits.len() == 1 {
-                    let key = hits[0];
-                    let value = *kmers_query.get(&k.to_string()).unwrap() as f64;
-                    uniq_freqs
-                        .entry(key.to_string())
-                        .or_insert(Vec::new())
-                        .push(value);
+                    let mut hits = Vec::new();
+                    for i in 0..first.len() {
+                        if first[i] {
+                            hits.push(&colors_accession[&i]);
+                        }
+                    }
+                    for h in &hits {
+                        let count = report.entry(h.to_string()).or_insert(0);
+                        *count += 1;
+                    }
+                    if hits.len() == 1 {
+                        let key = hits[0];
+                        let value = f64::from(kmers_query[&k.to_string()]);
+                        uniq_freqs
+                            .entry(key.to_string())
+                            .or_insert_with(Vec::new)
+                            .push(value);
+                    }
                 }
             }
             match bigsi_search.elapsed() {
@@ -236,8 +240,8 @@ pub fn batch_search(
                     eprintln!("Error: {:?}", e);
                 }
             }
-            if gene_search == false {
-                generate_report(report, uniq_freqs, n_ref_kmers.to_owned(), cov);
+            if !gene_search {
+                generate_report(report, &uniq_freqs, &n_ref_kmers, cov);
             } else {
                 generate_report_gene(report, num_kmers as usize);
             }
@@ -252,107 +256,20 @@ pub fn batch_search(
             println!("{} k-mers in query", num_kmers);
             let mut report = HashMap::new();
             let mut uniq_freqs = HashMap::new();
-            for (k, _) in &kmers_query {
+            for k in kmers_query.keys() {
                 let mut kmer_slices = Vec::new();
                 for i in 0..num_hash {
                     let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
                     let bi = bit_index as usize;
-                    if bigsi_map.contains_key(&bi) == false {
-                        let count = report.entry(String::from("No hits!")).or_insert(0);
-                        *count += 1;
+                    if !bigsi_map.contains_key(&bi) {
                         break;
                     } else {
-                        kmer_slices.push(bigsi_map.get(&bi).unwrap());
+                        kmer_slices.push(&bigsi_map[&bi]);
                     }
                 }
-                let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
-                for i in 1..num_hash {
-                    let j = i as usize;
-                    first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
-                }
-                let mut hits = Vec::new();
-                for i in 0..first.len() {
-                    if first[i] == true {
-                        hits.push(colors_accession.get(&i).unwrap());
-                    }
-                }
-                for h in &hits {
-                    let count = report.entry(h.to_string()).or_insert(0);
-                    *count += 1;
-                }
-                if hits.len() == 1 {
-                    let key = hits[0];
-                    let value = *kmers_query.get(&k.to_string()).unwrap() as f64;
-                    uniq_freqs
-                        .entry(key.to_string())
-                        .or_insert(Vec::new())
-                        .push(value);
-                }
-            }
-            if gene_search == false {
-                generate_report(report, uniq_freqs, n_ref_kmers.to_owned(), cov);
-            } else {
-                generate_report_gene(report, num_kmers as usize);
-            }
-        }
-    }
-}
-
-pub mod new_search;
-
-pub fn per_read_search(
-    filename: String,
-    bigsi_map: std::collections::HashMap<usize, Vec<u8>>,
-    colors_accession: std::collections::HashMap<usize, String>,
-    ref_kmers_in: std::collections::HashMap<String, usize>,
-    bloom_size: usize,
-    num_hash: usize,
-    k: usize,
-) -> std::collections::HashMap<String, usize> {
-    let mut f = File::open(filename).expect("file not found");
-    let mut line_count = 1;
-    let mut false_positive_p = HashMap::new();
-    for (key, value) in ref_kmers_in {
-        false_positive_p.insert(
-            key,
-            false_prob(bloom_size as f64, num_hash as f64, value as f64),
-        );
-    }
-    let mut tax_map = HashMap::new();
-    let d = MultiGzDecoder::new(f);
-    for line in io::BufReader::new(d).lines() {
-        let l = line.unwrap();
-        if line_count % 4 == 2 {
-            let mut map = HashMap::new();
-            let l_r = kmer_fa::revcomp(&l);
-            let length_l = l.len();
-            if length_l < k {
-                continue;
-            } else {
-                for i in 0..l.len() - k + 1 {
-                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-                        let count = map.entry(l[i..i + k].to_string()).or_insert(0);
-                        *count += 1;
-                    } else {
-                        let count = map.entry(l_r[length_l - (i + k)..length_l - i].to_string())
-                            .or_insert(0);
-                        *count += 1;
-                    }
-                }
-                let mut report = HashMap::new();
-                for (k, _) in &map {
-                    let mut kmer_slices = Vec::new();
-                    for i in 0..num_hash {
-                        let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
-                        let bi = bit_index as usize;
-                        if bigsi_map.contains_key(&bi) == false {
-                            let count = report.entry(String::from("No hits!")).or_insert(0);
-                            *count += 1;
-                            break;
-                        } else {
-                            kmer_slices.push(bigsi_map.get(&bi).unwrap());
-                        }
-                    }
+                if kmer_slices.len() < num_hash {
+                    continue;
+                } else {
                     let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
                     for i in 1..num_hash {
                         let j = i as usize;
@@ -360,54 +277,34 @@ pub fn per_read_search(
                     }
                     let mut hits = Vec::new();
                     for i in 0..first.len() {
-                        if first[i] == true {
-                            hits.push(colors_accession.get(&i).unwrap());
+                        if first[i] {
+                            hits.push(&colors_accession[&i]);
                         }
                     }
                     for h in &hits {
                         let count = report.entry(h.to_string()).or_insert(0);
                         *count += 1;
                     }
-                }
-                //println!("{}", report.len());
-                let kmer_length = length_l - k + 1;
-                let mut count_vec: Vec<_> = report.iter().collect();
-                count_vec.sort_by(|a, b| b.1.cmp(a.1));
-                if count_vec.len() == 0 {
-                    let count = tax_map.entry("no_hits".to_string()).or_insert(0);
-                    *count += 1;
-                } else {
-                    let p_false = false_positive_p.get(&count_vec[0].0.to_owned()).unwrap();
-                    let distribution = Binomial::new(kmer_length, *p_false);
-                    let critical_value = kmer_length as f64 * p_false;
-                    let mpf = distribution.mass(count_vec[0].1.to_owned());
-                    if (count_vec[0].1.to_owned() as f64) < critical_value {
-                        let count = tax_map.entry("no_hits".to_string()).or_insert(0);
-                        *count += 1;
-                    } else if ((count_vec[0].1.to_owned() as f64) > critical_value)
-                        && (mpf >= 0.001)
-                    {
-                        let count = tax_map.entry("no_hits".to_string()).or_insert(0);
-                        *count += 1;
-                    } else {
-                        //println!("{} {} {}", count_vec[0].0.to_owned(), count_vec[0].1.to_owned(), length_l - k + 1);
-                        let count = tax_map.entry(count_vec[0].0.to_string()).or_insert(0);
-                        *count += 1;
+                    if hits.len() == 1 {
+                        let key = hits[0];
+                        let value = f64::from(kmers_query[&k.to_string()]);
+                        uniq_freqs
+                            .entry(key.to_string())
+                            .or_insert_with(Vec::new)
+                            .push(value);
                     }
                 }
-                //line_count += 1;
+            }
+            if !gene_search {
+                generate_report(report, &uniq_freqs, &n_ref_kmers, cov);
+            } else {
+                generate_report_gene(report, num_kmers as usize);
             }
         }
-        line_count += 1;
-        if line_count % 400000 == 0 {
-            eprint!("Classified {} reads\r", line_count / 4);
-        }
-        //println!("{}", line_count);
     }
-    eprint!("Classified {} reads\r", line_count / 4);
-    eprint!("\n");
-    tax_map
 }
+
+pub mod build_mt;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct BigsyMap {
@@ -419,7 +316,7 @@ pub struct BigsyMap {
     pub n_ref_kmers: HashMap<String, usize>,
 }
 
-pub mod read_id_mt; 
+pub mod read_id_mt;
 
 pub fn save_bigsi(
     bigsi_map: std::collections::HashMap<usize, Vec<u8>>,
@@ -440,7 +337,9 @@ pub fn save_bigsi(
     };
     let serialized: Vec<u8> = serialize(&mappy, Infinite).unwrap();
     let mut writer = File::create(path).unwrap();
-    writer.write_all(&serialized);
+    writer
+        .write_all(&serialized)
+        .expect("problems preparing serialized data for writing");
 }
 
 pub fn save_bigsi_gz(
@@ -463,8 +362,9 @@ pub fn save_bigsi_gz(
     let serialized: Vec<u8> = serialize(&mappy, Infinite).unwrap();
     let f = File::create(path).unwrap();
     let mut gz = GzEncoder::new(f, Compression::new(9));
-    gz.write_all(&serialized);
-    gz.finish();
+    gz.write_all(&serialized)
+        .expect("could not write serialized index to file");
+    gz.finish().expect("did not finish writing file properly");
 }
 
 pub fn read_bigsi(
@@ -504,7 +404,8 @@ pub fn read_bigsi_gz(
     let file = File::open(path).expect("file not found");
     let mut gz = GzDecoder::new(file);
     let mut contents = Vec::new();
-    gz.read_to_end(&mut contents);
+    gz.read_to_end(&mut contents)
+        .expect("could not read contents file");
     let deserialized: BigsyMap = deserialize(&contents[..]).expect("cant deserialize");
     /*let mut bigsi_map = IndexMap::with_capacity(deserialized.map.len());
     for (key, vector) in deserialized.map {
@@ -520,7 +421,7 @@ pub fn read_bigsi_gz(
     )
 }
 //https://codereview.stackexchange.com/questions/173338/calculate-mean-median-and-mode-in-rust
-pub fn mode(numbers: &Vec<f64>) -> usize {
+pub fn mode(numbers: &[f64]) -> usize {
     let mut occurrences = HashMap::new();
 
     for value in numbers {
@@ -536,14 +437,14 @@ pub fn mode(numbers: &Vec<f64>) -> usize {
 
 pub fn generate_report(
     report: std::collections::HashMap<String, usize>,
-    uniq_freqs: std::collections::HashMap<String, Vec<f64>>,
-    n_ref_kmers: std::collections::HashMap<String, usize>,
+    uniq_freqs: &std::collections::HashMap<String, Vec<f64>>,
+    n_ref_kmers: &std::collections::HashMap<String, usize>,
     cov: f64,
 ) {
     for (k, v) in report {
         let frequencies = uniq_freqs.get(&k.to_string());
-        let mut mean: f64 = 0.0;
-        let mut modus: usize = 0;
+        let mut mean: f64;
+        let mut modus: usize;
         let mut specific_kmers: usize;
         match frequencies {
             Some(_x) => {
@@ -576,15 +477,15 @@ pub fn generate_report(
 
 pub fn generate_report_plus(
     report: std::collections::HashMap<String, usize>,
-    uniq_freqs: std::collections::HashMap<String, Vec<f64>>,
-    multi_freqs: std::collections::HashMap<String, Vec<f64>>,
-    n_ref_kmers: std::collections::HashMap<String, usize>,
+    uniq_freqs: &std::collections::HashMap<String, Vec<f64>>,
+    multi_freqs: &std::collections::HashMap<String, Vec<f64>>,
+    n_ref_kmers: &std::collections::HashMap<String, usize>,
     cov: f64,
 ) {
     for (k, v) in report {
         let frequencies = uniq_freqs.get(&k.to_string());
-        let mut mean: f64 = 0.0;
-        let mut modus: usize = 0;
+        let mut mean: f64;
+        let mut modus: usize;
         let mut specific_kmers: usize;
         match frequencies {
             Some(_x) => {
@@ -600,8 +501,8 @@ pub fn generate_report_plus(
             }
         }
         let multi_frequencies = multi_freqs.get(&k.to_string());
-        let mut multi_mean: f64 = 0.0;
-        let mut multi_modus: usize = 0;
+        let mut multi_mean: f64;
+        let mut multi_modus: usize;
         let mut multi_kmers: usize;
         match multi_frequencies {
             Some(_x) => {
@@ -646,6 +547,5 @@ pub fn generate_report_gene(
 
 pub fn false_prob(m: f64, k: f64, n: f64) -> f64 {
     let e = std::f64::consts::E;
-    let prob = (1.0 - e.powf(-((k * (n + 0.5)) / (m - 1.0)))).powf(k);
-    prob
+    (1.0 - e.powf(-((k * (n + 0.5)) / (m - 1.0)))).powf(k)
 }
