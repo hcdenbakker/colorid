@@ -17,6 +17,7 @@ fn main() {
                 .about("builds a bigsi")
                 .version("0.1")
                 .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
+                .setting(AppSettings::ArgRequiredElseHelp)
                 .arg(
                     Arg::with_name("bigsi")
                         .short("b")
@@ -86,6 +87,7 @@ fn main() {
                 .about("does a bigsi search on one or more fasta/fastq.gz files")
                 .version("0.1")
                 .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
+                .setting(AppSettings::ArgRequiredElseHelp)
                 .arg(
                     Arg::with_name("bigsi")
                         .short("b")
@@ -98,7 +100,9 @@ fn main() {
                               -q, --query      'one or more fastq.gz formatted files to be queried'
                               -f, --filter     'Sets threshold to filter k-mers by frequency'
                               -p, --p_shared        'minimum proportion of kmers shared with reference'
-                              -c, --compressed 'if set to 'true', will assume compressed index (default: false)'")
+                              -c, --compressed 'If set to 'true', will assume compressed index (default: false)'
+                              -g, If set('-g'), the proportion of kmers from the query matching the entries in the index will be reported'
+                              -s, If set('-s'), the 'speedy' 'perfect match' alforithm will be performed'")
                 .arg(
                     Arg::with_name("query")
                         .help("query file(-s)fastq.gz")
@@ -133,6 +137,14 @@ fn main() {
                         .long("gene_search"),
                 )
                 .arg(
+                    Arg::with_name("perfect_search")
+                        .help("If ('-s') is set, the fast 'perfect match' algorithm will be used")
+                        .required(false)
+                        .short("s")
+                        .takes_value(false)
+                        .long("perfect_search"),
+                )
+                .arg(
                     Arg::with_name("compressed")
                         .help("If set to 'true', it is assumed a gz compressed index is used")
                         .required(false)
@@ -157,6 +169,7 @@ fn main() {
                 .about("dumps index parameters and accessions")
                 .version("0.1")
                 .author("Henk den Bakker. <henkcdenbakker@gmail.com>")
+                .setting(AppSettings::ArgRequiredElseHelp)
                 .arg(
                     Arg::with_name("bigsi")
                         .short("b")
@@ -179,6 +192,7 @@ fn main() {
                 .about("id's reads")
                 .version("0.1")
                 .author("Henk den Bakker. <henkcdenbakker@gmail.com>")
+                .setting(AppSettings::ArgRequiredElseHelp)
                 .arg(
                     Arg::with_name("bigsi")
                         .short("b")
@@ -238,9 +252,9 @@ fn main() {
         let threads = value_t!(matches, "threads", usize).unwrap_or(1);
         let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
         let map = bigs_id::tab_to_map(matches.value_of("ref_file").unwrap().to_string());
-        let (bigsi_map, colors_accession, n_ref_kmers) = if threads == 1{
+        let (bigsi_map, colors_accession, n_ref_kmers) = if threads == 1 {
             bigs_id::build_bigsi2(&map, bloom, hashes, kmer)
-        }else{
+        } else {
             bigs_id::build_mt::build_bigsi(&map, bloom, hashes, kmer, threads)
         };
         println!("Saving BIGSI to file.");
@@ -271,6 +285,7 @@ fn main() {
         let filter = value_t!(matches, "filter", i32).unwrap_or(0);
         let cov = value_t!(matches, "shared_kmers", f64).unwrap_or(0.35);
         let gene_search = matches.is_present("gene_search");
+        let perfect_search = matches.is_present("perfect_search");
         let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
         let bigsi_time = SystemTime::now();
         eprintln!("Loading index");
@@ -289,6 +304,20 @@ fn main() {
                 eprintln!("Error: {:?}", e);
             }
         }
+        if perfect_search{
+            bigs_id::perfect_search::batch_search(
+            files,
+            &bigsi_map,
+            &colors_accession,
+            &n_ref_kmers,
+            bloom_size,
+            num_hash,
+            k_size,
+            filter,
+            cov,
+            gene_search,
+                )
+        }else{
         bigs_id::batch_search(
             files,
             &bigsi_map,
@@ -302,6 +331,8 @@ fn main() {
             gene_search,
         )
     }
+    }
+
     if let Some(matches) = matches.subcommand_matches("info") {
         let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
         let bigsi_time = SystemTime::now();
