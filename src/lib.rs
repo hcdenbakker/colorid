@@ -318,6 +318,8 @@ pub struct BigsyMap {
 
 pub mod read_id_mt;
 
+pub mod perfect_search;
+
 pub fn save_bigsi(
     bigsi_map: std::collections::HashMap<usize, Vec<u8>>,
     colors_accession: std::collections::HashMap<usize, String>,
