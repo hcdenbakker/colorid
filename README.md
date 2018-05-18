@@ -100,7 +100,8 @@ When we use this subcommand we get results presented as follows:
 ex2: 0.99
 ex3: 0.97
 ex4: 0.74
-ex5: 1.00```
+ex5: 1.00
+```
 
 The first column gives us the accesion in the index, the second the proportion of k-mers of our query that were found in this accession. The `-s' results just consist of one column, the accessions for which a perfect match for the query was found.
 
