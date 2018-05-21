@@ -316,7 +316,7 @@ pub struct BigsyMap {
     pub n_ref_kmers: HashMap<String, usize>,
 }
 
-pub mod read_id_mt;
+pub mod read_id_mt_v3;
 
 pub mod perfect_search;
 
