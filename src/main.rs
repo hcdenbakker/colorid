@@ -190,7 +190,7 @@ fn main() {
         .subcommand(
             SubCommand::with_name("read_id")
                 .about("id's reads")
-                .version("0.1")
+                .version("0.2")
                 .author("Henk den Bakker. <henkcdenbakker@gmail.com>")
                 .setting(AppSettings::ArgRequiredElseHelp)
                 .arg(
@@ -225,6 +225,14 @@ fn main() {
                         .short("t")
                         .takes_value(true)
                         .long("threads"),
+                )
+                .arg(
+                    Arg::with_name("down_sample")
+                        .help("down-sample k-mers used for read classification, default 1; increases speed at cost of decreased sensitivity ")
+                        .required(false)
+                        .short("d")
+                        .takes_value(true)
+                        .long("down_sample"),
                 )
                 .arg(
                     Arg::with_name("fp_correct")
@@ -304,33 +312,33 @@ fn main() {
                 eprintln!("Error: {:?}", e);
             }
         }
-        if perfect_search{
+        if perfect_search {
             bigs_id::perfect_search::batch_search(
-            files,
-            &bigsi_map,
-            &colors_accession,
-            &n_ref_kmers,
-            bloom_size,
-            num_hash,
-            k_size,
-            filter,
-            cov,
-            gene_search,
-                )
-        }else{
-        bigs_id::batch_search(
-            files,
-            &bigsi_map,
-            &colors_accession,
-            &n_ref_kmers,
-            bloom_size,
-            num_hash,
-            k_size,
-            filter,
-            cov,
-            gene_search,
-        )
-    }
+                files,
+                &bigsi_map,
+                &colors_accession,
+                &n_ref_kmers,
+                bloom_size,
+                num_hash,
+                k_size,
+                filter,
+                cov,
+                gene_search,
+            )
+        } else {
+            bigs_id::batch_search(
+                files,
+                &bigsi_map,
+                &colors_accession,
+                &n_ref_kmers,
+                bloom_size,
+                num_hash,
+                k_size,
+                filter,
+                cov,
+                gene_search,
+            )
+        }
     }
 
     if let Some(matches) = matches.subcommand_matches("info") {
@@ -373,6 +381,7 @@ fn main() {
         let fq = matches.value_of("query").unwrap();
         let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
         let threads = value_t!(matches, "threads", usize).unwrap_or(0);
+        let down_sample = value_t!(matches, "down_sample", usize).unwrap_or(1);
         let fp_correct = value_t!(matches, "fp_correct", f64).unwrap_or(0.001);
         eprintln!("Loading index");
         let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
@@ -390,7 +399,7 @@ fn main() {
                 eprintln!("Error: {:?}", e);
             }
         }
-        let tax_map = bigs_id::read_id_mt::per_read_search(
+        let tax_map = bigs_id::read_id_mt_v3::per_read_search(
             fq.to_string(),
             bigsi_map,
             &colors_accession,
@@ -399,6 +408,7 @@ fn main() {
             num_hash,
             k_size,
             threads,
+            down_sample,
             fp_correct,
         );
         for (k, v) in tax_map {
