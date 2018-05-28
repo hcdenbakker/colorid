@@ -21,11 +21,13 @@ use simple_bloom::BloomFilter;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io;
+use std::io::BufReader;
 use std::io::Write;
 use std::io::prelude::*;
 use std::time::SystemTime;
 
-pub fn tab_to_map(filename: String) -> std::collections::HashMap<std::string::String, String> {
+//adjust for pe implementation
+pub fn tab_to_map_old(filename: String) -> std::collections::HashMap<std::string::String, String> {
     let mut map = HashMap::new();
     let f = File::open(filename).expect("reference file not found");
     for line in io::BufReader::new(f).lines() {
@@ -36,8 +38,26 @@ pub fn tab_to_map(filename: String) -> std::collections::HashMap<std::string::St
     map
 }
 
+pub fn tab_to_map(filename: String) -> std::collections::HashMap<std::string::String, Vec<String>> {
+    let mut map = HashMap::new();
+    let f = File::open(filename).expect("reference file not found");
+    for line in io::BufReader::new(f).lines() {
+        let l = line.unwrap();
+        let v: Vec<&str> = l.split('\t').collect();
+        if v.len() == 2 {
+            map.insert(String::from(v[0]), vec![String::from(v[1])]);
+        } else {
+            map.insert(
+                String::from(v[0]),
+                vec![String::from(v[1]), String::from(v[2])],
+            );
+        }
+    }
+    map
+}
+
 pub fn build_bigsi2(
-    map: &std::collections::HashMap<std::string::String, String>,
+    map: &std::collections::HashMap<std::string::String, Vec<String>>,
     bloom_size: usize,
     num_hash: usize,
     k_size: usize,
@@ -56,23 +76,34 @@ pub fn build_bigsi2(
     for (accession, v) in map {
         eprintln!("Adding {} to index ({}/{})", accession, counter, map_length);
         counter += 1;
-        if v.ends_with("gz") {
-            let unfiltered = kmer_fa::kmers_from_fq(v.to_owned(), k_size);
-            let kmers = kmer_fa::clean_map(unfiltered, 1);
+        if v.len() == 2 {
+            let unfiltered = kmer_fa::kmers_fq_pe(vec![&v[0], &v[1]], k_size);
+            let cutoff = kmer_fa::auto_cutoff(unfiltered.to_owned());
+            let kmers = kmer_fa::clean_map(unfiltered, cutoff);
             let mut filter = BloomFilter::new(bloom_size as usize, num_hash as usize);
             for kmer in kmers.keys() {
                 filter.insert(&kmer);
             }
             bit_map.insert(accession, filter.bits);
         } else {
-            let vec = kmer_fa::read_fasta(v.to_string());
-            let kmers = kmer_fa::kmerize_vector(vec, k_size);
-            ref_kmer.insert(accession.to_string(), kmers.len());
-            let mut filter = BloomFilter::new(bloom_size as usize, num_hash as usize);
-            for kmer in kmers.keys() {
-                filter.insert(&kmer);
+            if v[0].ends_with("gz") {
+                let unfiltered = kmer_fa::kmers_from_fq(v[0].to_owned(), k_size);
+                let kmers = kmer_fa::clean_map(unfiltered, 1);
+                let mut filter = BloomFilter::new(bloom_size as usize, num_hash as usize);
+                for kmer in kmers.keys() {
+                    filter.insert(&kmer);
+                }
+                bit_map.insert(accession, filter.bits);
+            } else {
+                let vec = kmer_fa::read_fasta(v[0].to_string());
+                let kmers = kmer_fa::kmerize_vector(vec, k_size);
+                ref_kmer.insert(accession.to_string(), kmers.len());
+                let mut filter = BloomFilter::new(bloom_size as usize, num_hash as usize);
+                for kmer in kmers.keys() {
+                    filter.insert(&kmer);
+                }
+                bit_map.insert(accession, filter.bits);
             }
-            bit_map.insert(accession, filter.bits);
         }
     }
     for accession in map.keys() {
@@ -177,16 +208,22 @@ pub fn batch_search(
     bloom_size: usize,
     num_hash: usize,
     k_size: usize,
-    filter: i32,
+    filter: isize,
     cov: f64,
     gene_search: bool,
 ) {
     for file in files {
         if file.ends_with("gz") {
-            println!("{}", file);
+            eprintln!("{}", file);
             eprintln!("Counting k-mers, this may take a while!");
             let unfiltered = kmer_fa::kmers_from_fq(file.to_owned(), k_size);
-            let kmers_query = kmer_fa::clean_map(unfiltered, filter);
+            let kmers_query = 
+                if filter < 0{
+                    let cutoff = kmer_fa::auto_cutoff(unfiltered.to_owned()); 
+                    kmer_fa::clean_map(unfiltered, cutoff)
+                }else{
+                    kmer_fa::clean_map(unfiltered, filter as usize)
+                };
             let num_kmers = kmers_query.len() as f64;
             println!("{} k-mers in query", num_kmers);
             let bigsi_search = SystemTime::now();
@@ -223,7 +260,7 @@ pub fn batch_search(
                     }
                     if hits.len() == 1 {
                         let key = hits[0];
-                        let value = f64::from(kmers_query[&k.to_string()]);
+                        let value = kmers_query[&k.to_string()] as f64;
                         uniq_freqs
                             .entry(key.to_string())
                             .or_insert_with(Vec::new)
@@ -241,19 +278,25 @@ pub fn batch_search(
                 }
             }
             if !gene_search {
-                generate_report(report, &uniq_freqs, &n_ref_kmers, cov);
+                generate_report(file, report, &uniq_freqs, &n_ref_kmers, cov);
             } else {
-                generate_report_gene(report, num_kmers as usize);
+                generate_report_gene(file, report, num_kmers as usize);
             }
         } else {
             //else we assume it is a fasta formatted file!
-            println!("{}", file);
+            eprintln!("{}", file);
             eprintln!("Counting k-mers, this may take a while!");
             let vec_query = kmer_fa::read_fasta(file.to_owned());
             let unfiltered = kmer_fa::kmerize_vector(vec_query, k_size);
-            let kmers_query = kmer_fa::clean_map(unfiltered, filter);
+            let kmers_query =
+                if filter < 0{
+                    let cutoff = kmer_fa::auto_cutoff(unfiltered.to_owned());
+                    kmer_fa::clean_map(unfiltered, cutoff)
+                }else{
+                    kmer_fa::clean_map(unfiltered, filter as usize)
+                };
             let num_kmers = kmers_query.len() as f64;
-            println!("{} k-mers in query", num_kmers);
+            eprintln!("{} k-mers in query", num_kmers);
             let mut report = HashMap::new();
             let mut uniq_freqs = HashMap::new();
             for k in kmers_query.keys() {
@@ -287,7 +330,7 @@ pub fn batch_search(
                     }
                     if hits.len() == 1 {
                         let key = hits[0];
-                        let value = f64::from(kmers_query[&k.to_string()]);
+                        let value = kmers_query[&k.to_string()] as f64;
                         uniq_freqs
                             .entry(key.to_string())
                             .or_insert_with(Vec::new)
@@ -296,9 +339,9 @@ pub fn batch_search(
                 }
             }
             if !gene_search {
-                generate_report(report, &uniq_freqs, &n_ref_kmers, cov);
+                generate_report(file, report, &uniq_freqs, &n_ref_kmers, cov);
             } else {
-                generate_report_gene(report, num_kmers as usize);
+                generate_report_gene(file, report, num_kmers as usize);
             }
         }
     }
@@ -317,6 +360,8 @@ pub struct BigsyMap {
 }
 
 pub mod read_id_mt_v3;
+
+pub mod read_id_mt_pe;
 
 pub mod perfect_search;
 
@@ -379,10 +424,10 @@ pub fn read_bigsi(
     usize,
     usize,
 ) {
-    let mut file = File::open(path).expect("Can't open index!");
-    let mut contents = Vec::new();
-    file.read_to_end(&mut contents).expect("Can't read content");
-    let deserialized: BigsyMap = deserialize(&contents[..]).expect("cant deserialize");
+    let mut reader = BufReader::new(File::open(path).expect("Can't open index!"));
+    let mut buffer = Vec::new();
+    reader.read_to_end(&mut buffer).expect("Can't read content");
+    let deserialized: BigsyMap = deserialize(&buffer[..]).expect("cant deserialize");
     (
         deserialized.map,
         deserialized.colors,
@@ -438,6 +483,7 @@ pub fn mode(numbers: &[f64]) -> usize {
 }
 
 pub fn generate_report(
+    query: &str,
     report: std::collections::HashMap<String, usize>,
     uniq_freqs: &std::collections::HashMap<String, Vec<f64>>,
     n_ref_kmers: &std::collections::HashMap<String, usize>,
@@ -467,8 +513,8 @@ pub fn generate_report(
                 let genome_cov = v as f64 / *n_kmers.unwrap() as f64;
                 if genome_cov > cov {
                     println!(
-                        "{}: {:.2} {:.2} {} {}",
-                        k, genome_cov, mean, modus, specific_kmers
+                        "{}\t{}\t{:.2}\t{:.2}\t{}\t{}",
+                        query, k, genome_cov, mean, modus, specific_kmers
                     );
                 }
             }
@@ -536,13 +582,14 @@ pub fn generate_report_plus(
 }
 
 pub fn generate_report_gene(
+    query: &str,
     report: std::collections::HashMap<String, usize>,
     gene_kmer_size: usize,
 ) {
     for (k, v) in report {
         let gene_match = v as f64 / gene_kmer_size as f64;
         if gene_match > 0.35 {
-            println!("{}: {:.2}", k, gene_match);
+            println!("{}\t{}\t{}\t{:.2}", query, k, gene_kmer_size, gene_match);
         }
     }
 }
