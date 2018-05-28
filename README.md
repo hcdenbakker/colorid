@@ -64,7 +64,7 @@ Note! These parameters work well for single isolate, mixed samples with a few sp
 ``` ./target/release/bigs_id search -b test.bxi -q your_query.fastq.gz ```
 
 ### 3. results
-With the default settings `bigs_id` will report reference sequences that share 35% of their k-mers with the query (more about this threshold to follow later). Here is the output of a search with SRA accession SRR4098796 (L. monocytogenes lineage I) as query:
+With the default settings `bigs_id` will report reference sequences that share >35% of their k-mers with the query (more about this threshold to follow later). Here is the output of a search with SRA accession SRR4098796 (L. monocytogenes lineage I) as query:
 ```
 Listeria_monocytogenes_F2365: 0.87 68.43 64 664676
 Listeria_monocytogenes_SRR2167842: 0.40 62.65 2 11416
