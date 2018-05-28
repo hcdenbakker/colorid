@@ -17,7 +17,7 @@ use std::io;
 use std::io::prelude::*;
 
 pub fn build_bigsi(
-    map: &std::collections::HashMap<std::string::String, String>,
+    map: &std::collections::HashMap<std::string::String, Vec<String>>,
     bloom_size: usize,
     num_hash: usize,
     k_size: usize,
@@ -49,22 +49,34 @@ pub fn build_bigsi(
     c = map_vec
         .par_iter()
         .map(|l| {
-            if l.1.ends_with("gz") {
-                let unfiltered = kmer_fa::kmers_from_fq(l.1.to_owned(), k_size);
-                let kmers = kmer_fa::clean_map(unfiltered, 1);
+            if l.1.len() == 2 {
+                let unfiltered = kmer_fa::kmers_fq_pe(vec![&l.1[0], &l.1[1]], k_size);
+                let cutoff = kmer_fa::auto_cutoff(unfiltered.to_owned());
+                let kmers = kmer_fa::clean_map(unfiltered, cutoff);
                 let mut filter = BloomFilter::new(bloom_size as usize, num_hash as usize);
                 for kmer in kmers.keys() {
                     filter.insert(&kmer);
                 }
                 (l.0, filter.bits, kmers.len())
             } else {
-                let vec = kmer_fa::read_fasta(l.1.to_string());
-                let kmers = kmer_fa::kmerize_vector(vec, k_size);
-                let mut filter = BloomFilter::new(bloom_size as usize, num_hash as usize);
-                for kmer in kmers.keys() {
-                    filter.insert(&kmer);
+                if l.1[0].ends_with("gz") {
+                    let unfiltered = kmer_fa::kmers_from_fq(l.1[0].to_owned(), k_size);
+                    let cutoff = kmer_fa::auto_cutoff(unfiltered.to_owned());
+                    let kmers = kmer_fa::clean_map(unfiltered, cutoff);
+                    let mut filter = BloomFilter::new(bloom_size as usize, num_hash as usize);
+                    for kmer in kmers.keys() {
+                        filter.insert(&kmer);
+                    }
+                    (l.0, filter.bits, kmers.len())
+                } else {
+                    let vec = kmer_fa::read_fasta(l.1[0].to_string());
+                    let kmers = kmer_fa::kmerize_vector(vec, k_size);
+                    let mut filter = BloomFilter::new(bloom_size as usize, num_hash as usize);
+                    for kmer in kmers.keys() {
+                        filter.insert(&kmer);
+                    }
+                    (l.0, filter.bits, kmers.len())
                 }
-                (l.0, filter.bits, kmers.len())
             }
         })
         .collect();

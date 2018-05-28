@@ -290,7 +290,7 @@ fn main() {
     }
     if let Some(matches) = matches.subcommand_matches("search") {
         let files: Vec<_> = matches.values_of("query").unwrap().collect();
-        let filter = value_t!(matches, "filter", i32).unwrap_or(0);
+        let filter = value_t!(matches, "filter", isize).unwrap_or(-1);
         let cov = value_t!(matches, "shared_kmers", f64).unwrap_or(0.35);
         let gene_search = matches.is_present("gene_search");
         let perfect_search = matches.is_present("perfect_search");
@@ -321,7 +321,6 @@ fn main() {
                 bloom_size,
                 num_hash,
                 k_size,
-                filter,
                 cov,
                 gene_search,
             )
@@ -378,7 +377,8 @@ fn main() {
     }
     if let Some(matches) = matches.subcommand_matches("read_id") {
         let bigsi_time = SystemTime::now();
-        let fq = matches.value_of("query").unwrap();
+        //let fq = matches.value_of("query").unwrap();
+        let fq: Vec<_> = matches.values_of("query").unwrap().collect();
         let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
         let threads = value_t!(matches, "threads", usize).unwrap_or(0);
         let down_sample = value_t!(matches, "down_sample", usize).unwrap_or(1);
@@ -399,8 +399,8 @@ fn main() {
                 eprintln!("Error: {:?}", e);
             }
         }
-        let tax_map = bigs_id::read_id_mt_v3::per_read_search(
-            fq.to_string(),
+        let tax_map = bigs_id::read_id_mt_pe::per_read_search(
+            fq,
             bigsi_map,
             &colors_accession,
             &n_ref_kmers,
