@@ -365,6 +365,8 @@ pub mod read_id_mt_pe;
 
 pub mod perfect_search;
 
+pub mod batch_search_pe;
+
 pub fn save_bigsi(
     bigsi_map: std::collections::HashMap<usize, Vec<u8>>,
     colors_accession: std::collections::HashMap<usize, String>,
@@ -589,7 +591,7 @@ pub fn generate_report_gene(
     for (k, v) in report {
         let gene_match = v as f64 / gene_kmer_size as f64;
         if gene_match > 0.35 {
-            println!("{}\t{}\t{}\t{:.2}", query, k, gene_kmer_size, gene_match);
+            println!("{}\t{}\t{}\t{:.3}", query, k, gene_kmer_size, gene_match);
         }
     }
 }

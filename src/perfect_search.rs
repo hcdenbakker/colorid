@@ -60,7 +60,7 @@ pub fn batch_search(
             }
             println!("{} hits", hits.len());
             for h in &hits {
-                println!("{}\t{}\t{}\t1.00", file, kmers_query.len(), h);
+                println!("{}\t{}\t{}\t1.00", file, h, kmers_query.len());
             }
         }
     }
