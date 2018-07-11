@@ -90,6 +90,7 @@ fn main() {
                 .setting(AppSettings::ArgRequiredElseHelp)
                 .arg(
                     Arg::with_name("bigsi")
+                        .help("Sets the name of the index file for search")
                         .short("b")
                         .long("bigsi")
                         .required(true)
@@ -97,7 +98,8 @@ fn main() {
                 )
                 .help(
                               "                              -b, --bigsi=[FILE] 'Sets the name of the index file for search'
-                              -q, --query      'one or more fastq.gz formatted files to be queried'
+                              -q, --query      'one or more fastq.gz or fasta formatted files to be queried'
+                              -r, --reverse    'one or more fastq.gz (not fasta!) formatted files, supposed to be reverse reads of a paired end run'  
                               -f, --filter     'Sets threshold to filter k-mers by frequency'
                               -p, --p_shared        'minimum proportion of kmers shared with reference'
                               -c, --compressed 'If set to 'true', will assume compressed index (default: false)'
@@ -111,6 +113,16 @@ fn main() {
                         .short("q")
                         .takes_value(true)
                         .long("query"),
+                )
+                .arg(
+                    Arg::with_name("reverse")
+                        .help("reverse file(-s)fastq.gz")
+                        .required(false)
+                        .min_values(1)
+                        .default_value("none")
+                        .short("r")
+                        .takes_value(true)
+                        .long("reverse"),
                 )
                 .arg(
                     Arg::with_name("filter")
@@ -289,7 +301,13 @@ fn main() {
         };
     }
     if let Some(matches) = matches.subcommand_matches("search") {
-        let files: Vec<_> = matches.values_of("query").unwrap().collect();
+        let files1: Vec<_> = matches.values_of("query").unwrap().collect();
+        let files2 = if matches.value_of("reverse").unwrap() == "none"{
+            vec![]
+        }else{
+            matches.values_of("reverse").unwrap().collect()
+        };
+        //let files2: Vec<_> = matches.values_of("reverse").unwrap().collect();
         let filter = value_t!(matches, "filter", isize).unwrap_or(-1);
         let cov = value_t!(matches, "shared_kmers", f64).unwrap_or(0.35);
         let gene_search = matches.is_present("gene_search");
@@ -314,7 +332,7 @@ fn main() {
         }
         if perfect_search {
             bigs_id::perfect_search::batch_search(
-                files,
+                files1,
                 &bigsi_map,
                 &colors_accession,
                 &n_ref_kmers,
@@ -322,11 +340,11 @@ fn main() {
                 num_hash,
                 k_size,
                 cov,
-                gene_search,
             )
         } else {
-            bigs_id::batch_search(
-                files,
+            bigs_id::batch_search_pe::batch_search(
+                files1,
+                files2,
                 &bigsi_map,
                 &colors_accession,
                 &n_ref_kmers,

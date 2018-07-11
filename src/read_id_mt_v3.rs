@@ -87,16 +87,17 @@ pub fn per_read_search(
                 "too_short"
             } else {
                 for i in 0..l.len() - k + 1 {
-                    if i%d == 0{
-                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-                        let count = map.entry(l[i..i + k].to_string()).or_insert(0);
-                        *count += 1;
-                    } else {
-                        let count = map.entry(l_r[length_l - (i + k)..length_l - i].to_string())
-                            .or_insert(0);
-                        *count += 1;
+                    if i % d == 0 {
+                        if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                            let count = map.entry(l[i..i + k].to_string()).or_insert(0);
+                            *count += 1;
+                        } else {
+                            let count = map.entry(
+                                l_r[length_l - (i + k)..length_l - i].to_string(),
+                            ).or_insert(0);
+                            *count += 1;
+                        }
                     }
-                }
                 }
                 let empty_bitvec = bit_vec::BitVec::from_elem(child_fp.len(), false).to_bytes();
                 for k in map.keys() {

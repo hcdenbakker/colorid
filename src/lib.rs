@@ -26,17 +26,6 @@ use std::io::Write;
 use std::io::prelude::*;
 use std::time::SystemTime;
 
-//adjust for pe implementation
-pub fn tab_to_map_old(filename: String) -> std::collections::HashMap<std::string::String, String> {
-    let mut map = HashMap::new();
-    let f = File::open(filename).expect("reference file not found");
-    for line in io::BufReader::new(f).lines() {
-        let l = line.unwrap();
-        let v: Vec<&str> = l.split('\t').collect();
-        map.insert(String::from(v[0]), String::from(v[1]));
-    }
-    map
-}
 
 pub fn tab_to_map(filename: String) -> std::collections::HashMap<std::string::String, Vec<String>> {
     let mut map = HashMap::new();
@@ -133,218 +122,6 @@ pub fn build_bigsi2(
         }
     }
     (bigsi_map, colors_accession, ref_kmer)
-}
-
-//there seems to be a ~18 s overhead to this function for larger BIGSIs
-//add a hashmap with vectors containing k-mer coverages of uniquely placed k-mers to estimate
-//coverage per taxon
-pub fn search_bigsi(
-    kmer_query: &std::collections::HashMap<std::string::String, i32>,
-    bigsi_map: &std::collections::HashMap<usize, Vec<u8>>,
-    colors_accession: &std::collections::HashMap<usize, String>,
-    bloom_size: usize,
-    num_hash: usize,
-) -> (
-    std::collections::HashMap<String, usize>,
-    std::collections::HashMap<String, Vec<f64>>,
-    std::collections::HashMap<String, Vec<f64>>,
-) {
-    eprintln!("Search! Collecting slices");
-    let mut report = HashMap::new();
-    let mut uniq_freqs = HashMap::new();
-    let mut multi_freqs = HashMap::new();
-    for kmer in kmer_query.keys() {
-        let mut kmer_slices = Vec::new();
-        for i in 0..num_hash {
-            let bit_index = murmur_hash64a(kmer.as_bytes(), i as u64) % bloom_size as u64;
-            let bi = bit_index as usize;
-            if !bigsi_map.contains_key(&bi) {
-                let count = report.entry(String::from("No hits!")).or_insert(0);
-                *count += 1;
-                break;
-            } else {
-                kmer_slices.push(&bigsi_map[&bi]);
-            }
-        }
-        let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
-        for i in 1..num_hash {
-            let j = i as usize;
-            first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
-        }
-        let mut hits = Vec::new();
-        for i in 0..first.len() {
-            if first[i] {
-                hits.push(&colors_accession[&i]);
-            }
-        }
-        for h in &hits {
-            let count = report.entry(h.to_string()).or_insert(0);
-            *count += 1;
-            let value = f64::from(kmer_query[&kmer.to_string()]);
-            multi_freqs
-                .entry(h.to_string())
-                .or_insert_with(Vec::new)
-                .push(value);
-        }
-        if hits.len() == 1 {
-            let key = hits[0];
-            let value = f64::from(kmer_query[&kmer.to_string()]);
-            uniq_freqs
-                .entry(key.to_string())
-                .or_insert_with(Vec::new)
-                .push(value);
-        }
-    }
-    (report, uniq_freqs, multi_freqs)
-}
-
-// test with search_bigsi function show this will  introduce a ~13 second time overhead as opposed
-// to writing the search out
-pub fn batch_search(
-    files: Vec<&str>,
-    bigsi_map: &std::collections::HashMap<usize, Vec<u8>>,
-    colors_accession: &std::collections::HashMap<usize, String>,
-    n_ref_kmers: &std::collections::HashMap<String, usize>,
-    bloom_size: usize,
-    num_hash: usize,
-    k_size: usize,
-    filter: isize,
-    cov: f64,
-    gene_search: bool,
-) {
-    for file in files {
-        if file.ends_with("gz") {
-            eprintln!("{}", file);
-            eprintln!("Counting k-mers, this may take a while!");
-            let unfiltered = kmer_fa::kmers_from_fq(file.to_owned(), k_size);
-            let kmers_query = 
-                if filter < 0{
-                    let cutoff = kmer_fa::auto_cutoff(unfiltered.to_owned()); 
-                    kmer_fa::clean_map(unfiltered, cutoff)
-                }else{
-                    kmer_fa::clean_map(unfiltered, filter as usize)
-                };
-            let num_kmers = kmers_query.len() as f64;
-            println!("{} k-mers in query", num_kmers);
-            let bigsi_search = SystemTime::now();
-            let mut report = HashMap::new();
-            let mut uniq_freqs = HashMap::new();
-            for k in kmers_query.keys() {
-                let mut kmer_slices = Vec::new();
-                for i in 0..num_hash {
-                    let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
-                    let bi = bit_index as usize;
-                    if !bigsi_map.contains_key(&bi) {
-                        break;
-                    } else {
-                        kmer_slices.push(&bigsi_map[&bi]);
-                    }
-                }
-                if kmer_slices.len() < num_hash {
-                    continue;
-                } else {
-                    let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
-                    for i in 1..num_hash {
-                        let j = i as usize;
-                        first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
-                    }
-                    let mut hits = Vec::new();
-                    for i in 0..first.len() {
-                        if first[i] {
-                            hits.push(&colors_accession[&i]);
-                        }
-                    }
-                    for h in &hits {
-                        let count = report.entry(h.to_string()).or_insert(0);
-                        *count += 1;
-                    }
-                    if hits.len() == 1 {
-                        let key = hits[0];
-                        let value = kmers_query[&k.to_string()] as f64;
-                        uniq_freqs
-                            .entry(key.to_string())
-                            .or_insert_with(Vec::new)
-                            .push(value);
-                    }
-                }
-            }
-            match bigsi_search.elapsed() {
-                Ok(elapsed) => {
-                    eprintln!("Search: {} sec", elapsed.as_secs());
-                }
-                Err(e) => {
-                    // an error occurred!
-                    eprintln!("Error: {:?}", e);
-                }
-            }
-            if !gene_search {
-                generate_report(file, report, &uniq_freqs, &n_ref_kmers, cov);
-            } else {
-                generate_report_gene(file, report, num_kmers as usize);
-            }
-        } else {
-            //else we assume it is a fasta formatted file!
-            eprintln!("{}", file);
-            eprintln!("Counting k-mers, this may take a while!");
-            let vec_query = kmer_fa::read_fasta(file.to_owned());
-            let unfiltered = kmer_fa::kmerize_vector(vec_query, k_size);
-            let kmers_query =
-                if filter < 0{
-                    let cutoff = kmer_fa::auto_cutoff(unfiltered.to_owned());
-                    kmer_fa::clean_map(unfiltered, cutoff)
-                }else{
-                    kmer_fa::clean_map(unfiltered, filter as usize)
-                };
-            let num_kmers = kmers_query.len() as f64;
-            eprintln!("{} k-mers in query", num_kmers);
-            let mut report = HashMap::new();
-            let mut uniq_freqs = HashMap::new();
-            for k in kmers_query.keys() {
-                let mut kmer_slices = Vec::new();
-                for i in 0..num_hash {
-                    let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
-                    let bi = bit_index as usize;
-                    if !bigsi_map.contains_key(&bi) {
-                        break;
-                    } else {
-                        kmer_slices.push(&bigsi_map[&bi]);
-                    }
-                }
-                if kmer_slices.len() < num_hash {
-                    continue;
-                } else {
-                    let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
-                    for i in 1..num_hash {
-                        let j = i as usize;
-                        first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
-                    }
-                    let mut hits = Vec::new();
-                    for i in 0..first.len() {
-                        if first[i] {
-                            hits.push(&colors_accession[&i]);
-                        }
-                    }
-                    for h in &hits {
-                        let count = report.entry(h.to_string()).or_insert(0);
-                        *count += 1;
-                    }
-                    if hits.len() == 1 {
-                        let key = hits[0];
-                        let value = kmers_query[&k.to_string()] as f64;
-                        uniq_freqs
-                            .entry(key.to_string())
-                            .or_insert_with(Vec::new)
-                            .push(value);
-                    }
-                }
-            }
-            if !gene_search {
-                generate_report(file, report, &uniq_freqs, &n_ref_kmers, cov);
-            } else {
-                generate_report_gene(file, report, num_kmers as usize);
-            }
-        }
-    }
 }
 
 pub mod build_mt;
@@ -489,6 +266,7 @@ pub fn generate_report(
     report: std::collections::HashMap<String, usize>,
     uniq_freqs: &std::collections::HashMap<String, Vec<f64>>,
     n_ref_kmers: &std::collections::HashMap<String, usize>,
+    num_kmers: usize,
     cov: f64,
 ) {
     for (k, v) in report {
@@ -515,66 +293,8 @@ pub fn generate_report(
                 let genome_cov = v as f64 / *n_kmers.unwrap() as f64;
                 if genome_cov > cov {
                     println!(
-                        "{}\t{}\t{:.2}\t{:.2}\t{}\t{}",
-                        query, k, genome_cov, mean, modus, specific_kmers
-                    );
-                }
-            }
-            None => continue,
-        }
-    }
-}
-
-pub fn generate_report_plus(
-    report: std::collections::HashMap<String, usize>,
-    uniq_freqs: &std::collections::HashMap<String, Vec<f64>>,
-    multi_freqs: &std::collections::HashMap<String, Vec<f64>>,
-    n_ref_kmers: &std::collections::HashMap<String, usize>,
-    cov: f64,
-) {
-    for (k, v) in report {
-        let frequencies = uniq_freqs.get(&k.to_string());
-        let mut mean: f64;
-        let mut modus: usize;
-        let mut specific_kmers: usize;
-        match frequencies {
-            Some(_x) => {
-                mean = frequencies.unwrap().iter().fold(0.0, |a, &b| a + b)
-                    / frequencies.unwrap().len() as f64;
-                modus = mode(frequencies.unwrap());
-                specific_kmers = frequencies.unwrap().len();
-            }
-            None => {
-                mean = 0.0;
-                modus = 0;
-                specific_kmers = 0;
-            }
-        }
-        let multi_frequencies = multi_freqs.get(&k.to_string());
-        let mut multi_mean: f64;
-        let mut multi_modus: usize;
-        let mut multi_kmers: usize;
-        match multi_frequencies {
-            Some(_x) => {
-                multi_mean = multi_frequencies.unwrap().iter().fold(0.0, |a, &b| a + b)
-                    / multi_frequencies.unwrap().len() as f64;
-                multi_modus = mode(multi_frequencies.unwrap());
-                multi_kmers = multi_frequencies.unwrap().len();
-            }
-            None => {
-                multi_mean = 0.0;
-                multi_modus = 0;
-                multi_kmers = 0;
-            }
-        }
-        let n_kmers = n_ref_kmers.get(&k.to_string());
-        match n_kmers {
-            Some(_x) => {
-                let genome_cov = v as f64 / *n_kmers.unwrap() as f64;
-                if genome_cov > cov {
-                    println!(
-                        "{}: {:.2} {:.2} {} {:.2} {} {}",
-                        k, genome_cov, multi_mean, multi_modus, mean, modus, specific_kmers
+                        "{}\t{}\t{}\t{:.2}\t{:.2}\t{}\t{}",
+                        query, num_kmers, k, genome_cov, mean, modus, specific_kmers
                     );
                 }
             }
@@ -587,10 +307,11 @@ pub fn generate_report_gene(
     query: &str,
     report: std::collections::HashMap<String, usize>,
     gene_kmer_size: usize,
+    cov: f64,
 ) {
     for (k, v) in report {
         let gene_match = v as f64 / gene_kmer_size as f64;
-        if gene_match > 0.35 {
+        if gene_match >= cov {
             println!("{}\t{}\t{}\t{:.3}", query, k, gene_kmer_size, gene_match);
         }
     }
