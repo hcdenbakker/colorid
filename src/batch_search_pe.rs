@@ -52,7 +52,7 @@ pub fn batch_search(
                     kmer_fa::clean_map(unfiltered, filter as usize)
                 };
             let num_kmers = kmers_query.len() as f64;
-            println!("{} k-mers in query", num_kmers);
+            eprintln!("{} k-mers in query", num_kmers);
             let bigsi_search = SystemTime::now();
             let mut report = HashMap::new();
             let mut uniq_freqs = HashMap::new();
@@ -105,9 +105,9 @@ pub fn batch_search(
                 }
             }
             if !gene_search {
-                super::generate_report(file1, report, &uniq_freqs, &n_ref_kmers, cov);
+                super::generate_report(file1, report, &uniq_freqs, &n_ref_kmers, num_kmers as usize, cov);
             } else {
-                super::generate_report_gene(file1, report, num_kmers as usize);
+                super::generate_report_gene(file1, report, num_kmers as usize, cov);
             }
         } else {
             //else we assume it is a fasta formatted file!
@@ -169,9 +169,9 @@ pub fn batch_search(
                 }
             }
             if !gene_search {
-                super::generate_report(file1, report, &uniq_freqs, &n_ref_kmers, cov);
+                super::generate_report(file1, report, &uniq_freqs, &n_ref_kmers, num_kmers as usize, cov);
             } else {
-                super::generate_report_gene(file1, report, num_kmers as usize);
+                super::generate_report_gene(file1, report, num_kmers as usize, cov);
             }
         }
     }

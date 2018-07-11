@@ -22,7 +22,6 @@ pub fn batch_search(
     k_size: usize,
     //filter: usize,
     cov: f64,
-    gene_search: bool,
 ) {
     for file in files {
         //only fasta formatted file!
