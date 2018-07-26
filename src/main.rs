@@ -1,14 +1,15 @@
 extern crate bigs_id;
 #[macro_use]
 extern crate clap;
-extern crate kmer_fa;
 
+use bigs_id::bigsi;
+use bigs_id::build;
 use clap::{App, AppSettings, Arg, SubCommand};
 use std::time::SystemTime;
 
 fn main() {
     let matches = App::new("bigs_id")
-        .version("0.4")
+        .version("0.4.1")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .setting(AppSettings::ArgRequiredElseHelp)
@@ -26,12 +27,12 @@ fn main() {
                         .takes_value(true),
                 )
                 .help(
-                              "                              -b, --bigsi=[FILE] 'Sets the name of the index file'
+                              "                              -b, --bigsi=[FILE] 'Sets the prefix of the index file'
                               -r, --refs      'two column tab delimited file, first column taxon name, second column file  with sequence data plus path'
                               -k, --kmer      'sets kmer size to use for index'
                               -n, --num_hashes  'number of hashes to use for bloom filters'
                               -s, --bloom     'size bloom filter'
-                              -c, --compressed 'if set to 'true', will create a compressed index (default: false)'
+                              -m, --minimizer 'build index from minimizers'
                               -t, --threads 'sets number of threads, if set to 0, takes as many threads as it can get, default 1'")
                 .arg(
                     Arg::with_name("ref_file")
@@ -66,20 +67,20 @@ fn main() {
                         .long("bloom"),
                 )
                 .arg(
+                    Arg::with_name("minimizer")
+                        .help("build index with minimizers, default length minimizer is 15, unless indicated otherwise")
+                        .required(false)
+                        .short("m")
+                        .takes_value(true)
+                        .long("minimizer"),
+                )
+                .arg(
                     Arg::with_name("threads")
                         .help("number of threads to use, if not set one thread will be used")
                         .required(false)
                         .short("t")
                         .takes_value(true)
                         .long("threads"),
-                )
-                .arg(
-                    Arg::with_name("compressed")
-                        .help("If set to 'true', a gz compressed index is build")
-                        .required(false)
-                        .short("c")
-                        .takes_value(true)
-                        .long("compressed"),
                 ),
         )
         .subcommand(
@@ -102,9 +103,9 @@ fn main() {
                               -r, --reverse    'one or more fastq.gz (not fasta!) formatted files, supposed to be reverse reads of a paired end run'  
                               -f, --filter     'Sets threshold to filter k-mers by frequency'
                               -p, --p_shared        'minimum proportion of kmers shared with reference'
-                              -c, --compressed 'If set to 'true', will assume compressed index (default: false)'
                               -g, If set('-g'), the proportion of kmers from the query matching the entries in the index will be reported'
-                              -s, If set('-s'), the 'speedy' 'perfect match' alforithm will be performed'")
+                              -s, If set('-s'), the 'speedy' 'perfect match' alforithm will be performed'
+                              -m, If set('-m'), each accession in a multifasta will betreated as a separate query, currently only with the -s option'")
                 .arg(
                     Arg::with_name("query")
                         .help("query file(-s)fastq.gz")
@@ -157,12 +158,12 @@ fn main() {
                         .long("perfect_search"),
                 )
                 .arg(
-                    Arg::with_name("compressed")
-                        .help("If set to 'true', it is assumed a gz compressed index is used")
+                    Arg::with_name("multi_fasta")
+                        .help("If set('-m'), each accession in a multifasta will betreated as a separate query, currently only with the -s option")
                         .required(false)
-                        .short("c")
-                        .takes_value(true)
-                        .long("compressed"),
+                        .short("m")
+                        .takes_value(false)
+                        .long("multi_fasta"),
                 ),
         )
         /*.subcommand(
@@ -270,41 +271,49 @@ fn main() {
         let bloom = value_t!(matches, "length_bloom", usize).unwrap_or(50_000_000);
         let hashes = value_t!(matches, "num_hashes", usize).unwrap_or(4);
         let threads = value_t!(matches, "threads", usize).unwrap_or(1);
-        let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
-        let map = bigs_id::tab_to_map(matches.value_of("ref_file").unwrap().to_string());
-        let (bigsi_map, colors_accession, n_ref_kmers) = if threads == 1 {
-            bigs_id::build_bigsi2(&map, bloom, hashes, kmer)
-        } else {
-            bigs_id::build_mt::build_bigsi(&map, bloom, hashes, kmer, threads)
-        };
-        println!("Saving BIGSI to file.");
-        if !compressed {
-            bigs_id::save_bigsi(
+        let minimizer = matches.is_present("minimizer");
+        let minimizer_value = value_t!(matches, "minimizer", usize).unwrap_or(15);
+        let map = build::tab_to_map(matches.value_of("ref_file").unwrap().to_string());
+        if minimizer {
+            let (bigsi_map, colors_accession, n_ref_kmers) = if threads == 1 {
+                build::build_single_mini(&map, bloom, hashes, kmer, minimizer_value)
+            } else {
+                build::build_multi_mini(&map, bloom, hashes, kmer, minimizer_value, threads)
+            };
+            println!("Saving BIGSI to file.");
+            bigsi::save_bigsi_mini(
                 bigsi_map.to_owned(),
                 colors_accession.to_owned(),
                 n_ref_kmers.to_owned(),
                 bloom,
                 hashes,
                 kmer,
-                matches.value_of("bigsi").unwrap(),
-            )
+                minimizer_value,
+                &(matches.value_of("bigsi").unwrap().to_owned() + ".mxi"),
+            );
         } else {
-            bigs_id::save_bigsi_gz(
+            let (bigsi_map, colors_accession, n_ref_kmers) = if threads == 1 {
+                build::build_single(&map, bloom, hashes, kmer)
+            } else {
+                build::build_multi(&map, bloom, hashes, kmer, threads)
+            };
+            println!("Saving BIGSI to file.");
+            bigsi::save_bigsi(
                 bigsi_map.to_owned(),
                 colors_accession.to_owned(),
                 n_ref_kmers.to_owned(),
                 bloom,
                 hashes,
                 kmer,
-                matches.value_of("bigsi").unwrap(),
-            )
-        };
+                &(matches.value_of("bigsi").unwrap().to_owned() + ".bxi"),
+            );
+        }
     }
     if let Some(matches) = matches.subcommand_matches("search") {
         let files1: Vec<_> = matches.values_of("query").unwrap().collect();
-        let files2 = if matches.value_of("reverse").unwrap() == "none"{
+        let files2 = if matches.value_of("reverse").unwrap() == "none" {
             vec![]
-        }else{
+        } else {
             matches.values_of("reverse").unwrap().collect()
         };
         //let files2: Vec<_> = matches.values_of("reverse").unwrap().collect();
@@ -312,62 +321,73 @@ fn main() {
         let cov = value_t!(matches, "shared_kmers", f64).unwrap_or(0.35);
         let gene_search = matches.is_present("gene_search");
         let perfect_search = matches.is_present("perfect_search");
-        let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
-        let bigsi_time = SystemTime::now();
-        eprintln!("Loading index");
-        let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
-            if !compressed {
-                bigs_id::read_bigsi(matches.value_of("bigsi").unwrap())
-            } else {
-                bigs_id::read_bigsi_gz(matches.value_of("bigsi").unwrap())
-            };
-        match bigsi_time.elapsed() {
-            Ok(elapsed) => {
-                eprintln!("Index loaded in {} seconds", elapsed.as_secs());
-            }
-            Err(e) => {
-                // an error occurred!
-                eprintln!("Error: {:?}", e);
-            }
-        }
-        if perfect_search {
-            bigs_id::perfect_search::batch_search(
-                files1,
-                &bigsi_map,
-                &colors_accession,
-                &n_ref_kmers,
-                bloom_size,
-                num_hash,
-                k_size,
-                cov,
-            )
+        let multi_fasta = matches.is_present("multi_fasta");
+        if matches.value_of("bigsi").unwrap().ends_with(".mxi") {
+            eprintln!(
+                "Error: An index with minimizers (.mxi) is used, but not available for this function"
+            );
         } else {
-            bigs_id::batch_search_pe::batch_search(
-                files1,
-                files2,
-                &bigsi_map,
-                &colors_accession,
-                &n_ref_kmers,
-                bloom_size,
-                num_hash,
-                k_size,
-                filter,
-                cov,
-                gene_search,
-            )
+            let bigsi_time = SystemTime::now();
+            eprintln!("Loading index");
+            let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
+                bigsi::read_bigsi(matches.value_of("bigsi").unwrap());
+            match bigsi_time.elapsed() {
+                Ok(elapsed) => {
+                    eprintln!("Index loaded in {} seconds", elapsed.as_secs());
+                }
+                Err(e) => {
+                    // an error occurred!
+                    eprintln!("Error: {:?}", e);
+                }
+            }
+            if perfect_search {
+                if multi_fasta {
+                    //make 'perfect' batch....
+                    bigs_id::perfect_search::batch_search_mf(
+                        files1,
+                        &bigsi_map,
+                        &colors_accession,
+                        &n_ref_kmers,
+                        bloom_size,
+                        num_hash,
+                        k_size,
+                        cov,
+                    )
+                } else {
+                    bigs_id::perfect_search::batch_search(
+                        files1,
+                        &bigsi_map,
+                        &colors_accession,
+                        &n_ref_kmers,
+                        bloom_size,
+                        num_hash,
+                        k_size,
+                        cov,
+                    )
+                }
+            } else {
+                bigs_id::batch_search_pe::batch_search(
+                    files1,
+                    files2,
+                    &bigsi_map,
+                    &colors_accession,
+                    &n_ref_kmers,
+                    bloom_size,
+                    num_hash,
+                    k_size,
+                    filter,
+                    cov,
+                    gene_search,
+                )
+            }
         }
     }
 
     if let Some(matches) = matches.subcommand_matches("info") {
-        let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
         let bigsi_time = SystemTime::now();
         eprintln!("Loading index");
         let (_bigsi_map, colors_accession, _n_ref_kmers, bloom_size, num_hash, k_size) =
-            if !compressed {
-                bigs_id::read_bigsi(matches.value_of("bigsi").unwrap())
-            } else {
-                bigs_id::read_bigsi_gz(matches.value_of("bigsi").unwrap())
-            };
+            bigsi::read_bigsi(matches.value_of("bigsi").unwrap());
         match bigsi_time.elapsed() {
             Ok(elapsed) => {
                 eprintln!("Index loaded in {} seconds", elapsed.as_secs());
@@ -397,40 +417,66 @@ fn main() {
         let bigsi_time = SystemTime::now();
         //let fq = matches.value_of("query").unwrap();
         let fq: Vec<_> = matches.values_of("query").unwrap().collect();
-        let compressed = value_t!(matches, "compressed", bool).unwrap_or(false);
         let threads = value_t!(matches, "threads", usize).unwrap_or(0);
         let down_sample = value_t!(matches, "down_sample", usize).unwrap_or(1);
         let fp_correct = value_t!(matches, "fp_correct", f64).unwrap_or(0.001);
+        let index = matches.value_of("bigsi").unwrap();
         eprintln!("Loading index");
-        let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
-            if !compressed {
-                bigs_id::read_bigsi(matches.value_of("bigsi").unwrap())
-            } else {
-                bigs_id::read_bigsi_gz(matches.value_of("bigsi").unwrap())
-            };
-        match bigsi_time.elapsed() {
-            Ok(elapsed) => {
-                eprintln!("Index loaded in {} seconds", elapsed.as_secs());
+        if index.ends_with(".mxi") {
+            let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size, m_size) =
+                bigsi::read_bigsi_mini(matches.value_of("bigsi").unwrap());
+            match bigsi_time.elapsed() {
+                Ok(elapsed) => {
+                    eprintln!("Index loaded in {} seconds", elapsed.as_secs());
+                }
+                Err(e) => {
+                    // an error occurred!
+                    eprintln!("Error: {:?}", e);
+                }
             }
-            Err(e) => {
-                // an error occurred!
-                eprintln!("Error: {:?}", e);
+            let tax_map = bigs_id::read_id_mt_pe::per_read_search_minimizer(
+                fq,
+                bigsi_map,
+                &colors_accession,
+                &n_ref_kmers,
+                bloom_size,
+                num_hash,
+                k_size,
+                m_size,
+                threads,
+                down_sample,
+                fp_correct,
+            );
+            for (k, v) in tax_map {
+                println!("{}: {}", k, v);
             }
-        }
-        let tax_map = bigs_id::read_id_mt_pe::per_read_search(
-            fq,
-            bigsi_map,
-            &colors_accession,
-            &n_ref_kmers,
-            bloom_size,
-            num_hash,
-            k_size,
-            threads,
-            down_sample,
-            fp_correct,
-        );
-        for (k, v) in tax_map {
-            println!("{}: {}", k, v);
+        } else {
+            let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
+                bigsi::read_bigsi(matches.value_of("bigsi").unwrap());
+            match bigsi_time.elapsed() {
+                Ok(elapsed) => {
+                    eprintln!("Index loaded in {} seconds", elapsed.as_secs());
+                }
+                Err(e) => {
+                    // an error occurred!
+                    eprintln!("Error: {:?}", e);
+                }
+            }
+            let tax_map = bigs_id::read_id_mt_pe::per_read_search(
+                fq,
+                bigsi_map,
+                &colors_accession,
+                &n_ref_kmers,
+                bloom_size,
+                num_hash,
+                k_size,
+                threads,
+                down_sample,
+                fp_correct,
+            );
+            for (k, v) in tax_map {
+                println!("{}: {}", k, v);
+            }
         }
     }
 }
