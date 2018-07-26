@@ -71,8 +71,17 @@ fn main() {
                         .help("build index with minimizers, default length minimizer is 15, unless indicated otherwise")
                         .required(false)
                         .short("m")
-                        .takes_value(true)
+                        .takes_value(false)
                         .long("minimizer"),
+                )
+                .arg(
+                    Arg::with_name("value")
+                        .help("sets length minimizer (default 15)")
+                        .required(false)
+                        .short("v")
+                        .default_value("15")
+                        .takes_value(true)
+                        .long("value"),
                 )
                 .arg(
                     Arg::with_name("threads")
@@ -272,9 +281,11 @@ fn main() {
         let hashes = value_t!(matches, "num_hashes", usize).unwrap_or(4);
         let threads = value_t!(matches, "threads", usize).unwrap_or(1);
         let minimizer = matches.is_present("minimizer");
-        let minimizer_value = value_t!(matches, "minimizer", usize).unwrap_or(15);
+        //hack to work around current clap bug with default values only being &str
+        let minimizer_value: usize = matches.value_of("value").unwrap().parse::<usize>().unwrap();
         let map = build::tab_to_map(matches.value_of("ref_file").unwrap().to_string());
         if minimizer {
+            println!("Build with minimizers, minimizer size: {}", minimizer_value);
             let (bigsi_map, colors_accession, n_ref_kmers) = if threads == 1 {
                 build::build_single_mini(&map, bloom, hashes, kmer, minimizer_value)
             } else {
