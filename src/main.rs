@@ -9,7 +9,7 @@ use std::time::SystemTime;
 
 fn main() {
     let matches = App::new("bigs_id")
-        .version("0.4")
+        .version("0.4.1")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .setting(AppSettings::ArgRequiredElseHelp)
