@@ -1,7 +1,0 @@
-[package]
-name = "kmer_fa"
-version = "0.1.0"
-authors = ["hcdenbakker <henkcdenbakker@gmail.com>"]
-
-[dependencies]
-flate2 = "1.0.1"
