@@ -1,24 +1,10 @@
-extern crate bincode;
-extern crate bit_vec;
-extern crate flate2;
-extern crate kmer_fa;
-extern crate murmurhash64;
-extern crate simple_bloom;
-
 use bit_vec::BitVec;
-use flate2::Compression;
-use flate2::read::GzDecoder;
-use flate2::write::GzEncoder;
+use kmer;
 use murmurhash64::murmur_hash64a;
-use simple_bloom::BloomFilter;
-use std::collections::HashMap;
-use std::fs::File;
-use std::io;
-use std::io::BufReader;
-use std::io::Write;
-use std::io::prelude::*;
-use std::time::SystemTime;
+use reports;
 use std;
+use std::collections::HashMap;
+use std::time::SystemTime;
 
 pub fn batch_search(
     files1: Vec<&str>,
@@ -33,24 +19,23 @@ pub fn batch_search(
     cov: f64,
     gene_search: bool,
 ) {
-    for (i,file1) in files1.iter().enumerate() {
+    for (i, file1) in files1.iter().enumerate() {
         if file1.ends_with("gz") {
-            let unfiltered = if files2.len() == 0{
-            eprintln!("{}", file1);
-            eprintln!("Counting k-mers, this may take a while!");
-            kmer_fa::kmers_from_fq(file1.to_owned().to_string(), k_size)
-            }else{
+            let unfiltered = if files2.len() == 0 {
+                eprintln!("{}", file1);
+                eprintln!("Counting k-mers, this may take a while!");
+                kmer::kmers_from_fq(file1.to_owned().to_string(), k_size)
+            } else {
                 eprintln!("Paired end: {} {}", file1, files2[i]);
                 eprintln!("Counting k-mers, this may take a while!");
-                kmer_fa::kmers_fq_pe(vec![&file1, &files2[i]], k_size)
+                kmer::kmers_fq_pe(vec![&file1, &files2[i]], k_size)
             };
-            let kmers_query =
-                if filter < 0{
-                    let cutoff = kmer_fa::auto_cutoff(unfiltered.to_owned());
-                    kmer_fa::clean_map(unfiltered, cutoff)
-                }else{
-                    kmer_fa::clean_map(unfiltered, filter as usize)
-                };
+            let kmers_query = if filter < 0 {
+                let cutoff = kmer::auto_cutoff(unfiltered.to_owned());
+                kmer::clean_map(unfiltered, cutoff)
+            } else {
+                kmer::clean_map(unfiltered, filter as usize)
+            };
             let num_kmers = kmers_query.len() as f64;
             eprintln!("{} k-mers in query", num_kmers);
             let bigsi_search = SystemTime::now();
@@ -105,26 +90,32 @@ pub fn batch_search(
                 }
             }
             if !gene_search {
-                super::generate_report(file1, report, &uniq_freqs, &n_ref_kmers, num_kmers as usize, cov);
+                reports::generate_report(
+                    file1,
+                    report,
+                    &uniq_freqs,
+                    &n_ref_kmers,
+                    num_kmers as usize,
+                    cov,
+                );
             } else {
-                super::generate_report_gene(file1, report, num_kmers as usize, cov);
+                reports::generate_report_gene(file1, report, num_kmers as usize, cov);
             }
         } else {
             //else we assume it is a fasta formatted file!
             eprintln!("{}", file1);
             eprintln!("Counting k-mers, this may take a while!");
-            let vec_query = kmer_fa::read_fasta(file1.to_owned().to_string());
-            let unfiltered = kmer_fa::kmerize_vector(vec_query, k_size);
-            let kmers_query =
-                if gene_search{
-                    kmer_fa::clean_map(unfiltered, 0)
-                } else if filter < 0{
-                    eprintln!("no gene search");
-                    let cutoff = kmer_fa::auto_cutoff(unfiltered.to_owned());
-                    kmer_fa::clean_map(unfiltered, cutoff)
-                }else{
-                    kmer_fa::clean_map(unfiltered, filter as usize)
-                };
+            let vec_query = kmer::read_fasta(file1.to_owned().to_string());
+            let unfiltered = kmer::kmerize_vector(vec_query, k_size);
+            let kmers_query = if gene_search {
+                kmer::clean_map(unfiltered, 0)
+            } else if filter < 0 {
+                eprintln!("no gene search");
+                let cutoff = kmer::auto_cutoff(unfiltered.to_owned());
+                kmer::clean_map(unfiltered, cutoff)
+            } else {
+                kmer::clean_map(unfiltered, filter as usize)
+            };
             let num_kmers = kmers_query.len() as f64;
             eprintln!("{} k-mers in query", num_kmers);
             let mut report = HashMap::new();
@@ -169,9 +160,16 @@ pub fn batch_search(
                 }
             }
             if !gene_search {
-                super::generate_report(file1, report, &uniq_freqs, &n_ref_kmers, num_kmers as usize, cov);
+                reports::generate_report(
+                    file1,
+                    report,
+                    &uniq_freqs,
+                    &n_ref_kmers,
+                    num_kmers as usize,
+                    cov,
+                );
             } else {
-                super::generate_report_gene(file1, report, num_kmers as usize, cov);
+                reports::generate_report_gene(file1, report, num_kmers as usize, cov);
             }
         }
     }
