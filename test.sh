@@ -1,6 +1,6 @@
 # Build the database with one thread
 echo "Building the database"
-./target/debug/bigs_id build -s 750000 -n 4 -k 27 -b ./test_data/phage.bxi -r ./test_data/ref_file.txt
+./target/debug/bigs_id build -s 750000 -n 4 -k 27 -b ./test_data/phage -r ./test_data/ref_file.txt
 if [ $? -gt 0 ]; then
   echo "ERROR building bigs_id database ./test_data/phage.bxi using ./test_data/ref_file.txt";
   exit 1
@@ -8,7 +8,7 @@ fi
 
 # Build the database with two threads
 echo "Building the database"
-./target/debug/bigs_id build -s 750000 -n 4 -k 27 -b ./test_data/phage.bxi -r ./test_data/ref_file.txt -t 2
+./target/debug/bigs_id build -s 750000 -n 4 -k 27 -b ./test_data/phage -r ./test_data/ref_file.txt -t 2
 if [ $? -gt 0 ]; then
   echo "ERROR building bigs_id database ./test_data/phage.bxi using ./test_data/ref_file.txt";
   exit 1
@@ -35,12 +35,12 @@ fi
 
 # Test the output k-mer search
 echo "Testing the output";
-declare -a expected=(Listeria_phage_B056: 1.00 206.20 35 26711)
+declare -a expected=(./test_data/SRR548019.fastq.gz	244500	Listeria_phage_B056	1.00	206.20	35	26711)
 lastIndex=$((${#expected[@]} - 1))
 #echo "$lastIndex .. ${expected[@]}"
 for i in $(seq 0 $lastIndex); do
   j=$((i + 1));
-  observed="$(grep Listeria_phage_B056 test.out | cut -f $j -d ' ')"
+  observed="$(grep Listeria_phage_B056 test.out | cut -f $j -d $'\t')"
   echo "${expected[$i]} <=> $observed";
   if [ "${expected[$i]}" != "$observed" ]; then
     echo "ERROR: test output was incorrect in field $i.  I expected ${expected[$i]} but got $observed."
