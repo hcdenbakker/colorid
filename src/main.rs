@@ -258,7 +258,7 @@ fn main() {
                 )
                 .arg(
                     Arg::with_name("fp_correct")
-                        .help("parameter to correct for false positives, default 0.001, maybe increased for larger searches")
+                        .help("parameter to correct for false positives, default 3 (= 0.001), maybe increased for larger searches")
                         .required(false)
                         .short("p")
                         .takes_value(true)
@@ -397,29 +397,57 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("info") {
         let bigsi_time = SystemTime::now();
         eprintln!("Loading index");
-        let (_bigsi_map, colors_accession, _n_ref_kmers, bloom_size, num_hash, k_size) =
-            bigsi::read_bigsi(matches.value_of("bigsi").unwrap());
-        match bigsi_time.elapsed() {
-            Ok(elapsed) => {
-                eprintln!("Index loaded in {} seconds", elapsed.as_secs());
+        let index = matches.value_of("bigsi").unwrap();
+        if index.ends_with(".mxi") {
+            let (_bigsi_map, colors_accession, _n_ref_kmers, bloom_size, num_hash, k_size, m_size) =
+                bigsi::read_bigsi_mini(index);
+            match bigsi_time.elapsed() {
+                Ok(elapsed) => {
+                    eprintln!("Index loaded in {} seconds", elapsed.as_secs());
+                }
+                Err(e) => {
+                    // an error occurred!
+                    eprintln!("Error: {:?}", e);
+                }
             }
-            Err(e) => {
-                // an error occurred!
-                eprintln!("Error: {:?}", e);
-            }
-        }
-        println!(
-            "BIGSI parameters:\nBloomfilter-size: {}\nNumber of hashes: {}\nK-mer size: {}",
-            bloom_size, num_hash, k_size
+            println!(
+            "BIGSI parameters:\nBloomfilter-size: {}\nNumber of hashes: {}\nK-mer size: {}\n minimizer size: {}\n",
+            bloom_size, num_hash, k_size, m_size
         );
-        println!("Number of accessions in index: {}", colors_accession.len());
-        let mut accessions = Vec::new();
-        for (_k, v) in colors_accession {
-            accessions.push(v);
-        }
-        accessions.sort_by(|a, b| a.cmp(b));
-        for a in accessions {
-            println!("{}", a);
+            println!("Number of accessions in index: {}", colors_accession.len());
+            let mut accessions = Vec::new();
+            for (_k, v) in colors_accession {
+                accessions.push(v);
+            }
+            accessions.sort_by(|a, b| a.cmp(b));
+            for a in accessions {
+                println!("{}", a);
+            }
+        } else {
+            let (_bigsi_map, colors_accession, _n_ref_kmers, bloom_size, num_hash, k_size) =
+                bigsi::read_bigsi(index);
+            match bigsi_time.elapsed() {
+                Ok(elapsed) => {
+                    eprintln!("Index loaded in {} seconds", elapsed.as_secs());
+                }
+                Err(e) => {
+                    // an error occurred!
+                    eprintln!("Error: {:?}", e);
+                }
+            }
+            println!(
+                "BIGSI parameters:\nBloomfilter-size: {}\nNumber of hashes: {}\nK-mer size: {}",
+                bloom_size, num_hash, k_size
+            );
+            println!("Number of accessions in index: {}", colors_accession.len());
+            let mut accessions = Vec::new();
+            for (_k, v) in colors_accession {
+                accessions.push(v);
+            }
+            accessions.sort_by(|a, b| a.cmp(b));
+            for a in accessions {
+                println!("{}", a);
+            }
         }
         //let accessions_sorted = accessions.sort_by(|a, b| b.cmp(a));
         //println!("{}", accessions_sorted.len());
@@ -430,7 +458,8 @@ fn main() {
         let fq: Vec<_> = matches.values_of("query").unwrap().collect();
         let threads = value_t!(matches, "threads", usize).unwrap_or(0);
         let down_sample = value_t!(matches, "down_sample", usize).unwrap_or(1);
-        let fp_correct = value_t!(matches, "fp_correct", f64).unwrap_or(0.001);
+        let correct = value_t!(matches, "fp_correct", f64).unwrap_or(3.0);
+        let fp_correct = 1.0 / 10f64.powf(correct);
         let index = matches.value_of("bigsi").unwrap();
         eprintln!("Loading index");
         if index.ends_with(".mxi") {

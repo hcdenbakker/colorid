@@ -1,6 +1,6 @@
 extern crate serde;
 
-use bincode::{deserialize, serialize, Infinite};
+use bincode::{deserialize, serialize, deserialize_from, Infinite};
 use std;
 use std::collections::HashMap;
 use std::fs::File;
@@ -64,9 +64,10 @@ pub fn read_bigsi(
     usize,
 ) {
     let mut reader = BufReader::new(File::open(path).expect("Can't open index!"));
-    let mut buffer = Vec::new();
-    reader.read_to_end(&mut buffer).expect("Can't read content");
-    let deserialized: BigsyMap = deserialize(&buffer[..]).expect("cant deserialize");
+    //let mut buffer = Vec::new();
+    //reader.read_to_end(&mut buffer).expect("Can't read content");
+    //let deserialized: BigsyMap = deserialize(&buffer[..]).expect("cant deserialize");
+    let deserialized: BigsyMap = deserialize_from(&mut reader, Infinite).expect("cant deserialize");
     (
         deserialized.map,
         deserialized.colors,
@@ -115,9 +116,10 @@ pub fn read_bigsi_mini(
     usize,
 ) {
     let mut reader = BufReader::new(File::open(path).expect("Can't open index!"));
-    let mut buffer = Vec::new();
-    reader.read_to_end(&mut buffer).expect("Can't read content");
-    let deserialized: BigsyMapMini = deserialize(&buffer[..]).expect("cant deserialize");
+    //let mut buffer = Vec::new();
+    //reader.read_to_end(&mut buffer).expect("Can't read content");
+    //let deserialized: BigsyMapMini = deserialize(&buffer[..]).expect("cant deserialize");
+    let deserialized: BigsyMapMini = deserialize_from(&mut reader, Infinite).expect("cant deserialize");
     (
         deserialized.map,
         deserialized.colors,
