@@ -1,10 +1,9 @@
 extern crate serde;
 
-use bincode::{deserialize, serialize, deserialize_from, Infinite};
+use bincode::{serialize, deserialize_from, Infinite};
 use std;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::prelude::*;
 use std::io::BufReader;
 use std::io::Write;
 
