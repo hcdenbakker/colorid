@@ -85,23 +85,54 @@ pub fn read_fasta_mf(filename: String) -> (Vec<String>, Vec<String>) {
 pub fn kmerize_vector(
     v: Vec<String>,
     k: usize,
+    d: usize,
 ) -> std::collections::HashMap<std::string::String, usize> {
     let mut map = HashMap::new();
     for l in v {
         let length_l = l.len();
         let l_r = revcomp(&l);
         for i in 0..l.len() - k + 1 {
-            if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-                let count = map.entry(l[i..i + k].to_string().to_uppercase())
-                    .or_insert(0);
-                *count += 1;
-            } else {
-                let count = map.entry(
-                    l_r[length_l - (i + k)..length_l - i]
-                        .to_string()
-                        .to_uppercase(),
-                ).or_insert(0);
-                *count += 1;
+            if i % d == 0 {
+                if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                    let count = map
+                        .entry(l[i..i + k].to_string().to_uppercase())
+                        .or_insert(0);
+                    *count += 1;
+                } else {
+                    let count =
+                        map.entry(
+                            l_r[length_l - (i + k)..length_l - i]
+                                .to_string()
+                                .to_uppercase(),
+                        ).or_insert(0);
+                    *count += 1;
+                }
+            }
+        }
+    }
+    map
+}
+
+pub fn kmerize_vector_uppercase(
+    v: Vec<String>,
+    k: usize,
+    d: usize,
+) -> std::collections::HashMap<std::string::String, usize> {
+    let mut map = HashMap::new();
+    for l in v {
+        let length_l = l.len();
+        let l_r = revcomp(&l);
+        for i in 0..l.len() - k + 1 {
+            if i % d == 0 {
+                if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                    let count = map.entry(l[i..i + k].to_string()).or_insert(0);
+                    *count += 1;
+                } else {
+                    let count = map
+                        .entry(l_r[length_l - (i + k)..length_l - i].to_string())
+                        .or_insert(0);
+                    *count += 1;
+                }
             }
         }
     }
@@ -117,15 +148,17 @@ pub fn kmerize_string(
     let l_r = revcomp(&l);
     for i in 0..l.len() - k + 1 {
         if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-            let count = map.entry(l[i..i + k].to_string().to_uppercase())
+            let count = map
+                .entry(l[i..i + k].to_string().to_uppercase())
                 .or_insert(0);
             *count += 1;
         } else {
-            let count = map.entry(
-                l_r[length_l - (i + k)..length_l - i]
-                    .to_string()
-                    .to_uppercase(),
-            ).or_insert(0);
+            let count =
+                map.entry(
+                    l_r[length_l - (i + k)..length_l - i]
+                        .to_string()
+                        .to_uppercase(),
+                ).or_insert(0);
             *count += 1;
         }
     }
@@ -136,20 +169,23 @@ pub fn minimerize_vector(
     v: Vec<String>,
     k: usize,
     m: usize,
+    d: usize,
 ) -> std::collections::HashMap<std::string::String, usize> {
     let mut map = HashMap::new();
     for l in v {
         let length_l = l.len();
         let l_r = revcomp(&l);
         for i in 0..l.len() - k + 1 {
-            if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-                let min = find_minimizer(&l[i..i + k], m);
-                let count = map.entry(min).or_insert(0);
-                *count += 1;
-            } else {
-                let min = find_minimizer(&l_r[length_l - (i + k)..length_l - i], m);
-                let count = map.entry(min).or_insert(0);
-                *count += 1;
+            if i % d == 0 {
+                if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                    let min = find_minimizer(&l[i..i + k], m);
+                    let count = map.entry(min).or_insert(0);
+                    *count += 1;
+                } else {
+                    let min = find_minimizer(&l_r[length_l - (i + k)..length_l - i], m);
+                    let count = map.entry(min).or_insert(0);
+                    *count += 1;
+                }
             }
         }
     }
@@ -177,7 +213,8 @@ pub fn kmers_from_fq(
                         let count = map.entry(l[i..i + k].to_string()).or_insert(0);
                         *count += 1;
                     } else {
-                        let count = map.entry(l_r[length_l - (i + k)..length_l - i].to_string())
+                        let count = map
+                            .entry(l_r[length_l - (i + k)..length_l - i].to_string())
                             .or_insert(0);
                         *count += 1;
                     }
@@ -212,9 +249,9 @@ pub fn kmers_from_fq_minimizer(
                         let count = map.entry(find_minimizer(&l[i..i + k], m)).or_insert(0);
                         *count += 1;
                     } else {
-                        let count =
-                            map.entry(find_minimizer(&l_r[length_l - (i + k)..length_l - i], m))
-                                .or_insert(0);
+                        let count = map
+                            .entry(find_minimizer(&l_r[length_l - (i + k)..length_l - i], m))
+                            .or_insert(0);
                         *count += 1;
                     }
                 }
@@ -248,9 +285,9 @@ pub fn kmers_fq_pe(
                             let count = map.entry(l[i..i + k].to_string()).or_insert(0);
                             *count += 1;
                         } else {
-                            let count = map.entry(
-                                l_r[length_l - (i + k)..length_l - i].to_string(),
-                            ).or_insert(0);
+                            let count = map
+                                .entry(l_r[length_l - (i + k)..length_l - i].to_string())
+                                .or_insert(0);
                             *count += 1;
                         }
                     }
@@ -285,10 +322,9 @@ pub fn kmers_fq_pe_minimizer(
                             let count = map.entry(find_minimizer(&l[i..i + k], m)).or_insert(0);
                             *count += 1;
                         } else {
-                            let count = map.entry(find_minimizer(
-                                &l_r[length_l - (i + k)..length_l - i],
-                                m,
-                            )).or_insert(0);
+                            let count = map
+                                .entry(find_minimizer(&l_r[length_l - (i + k)..length_l - i], m))
+                                .or_insert(0);
                             *count += 1;
                         }
                     }
