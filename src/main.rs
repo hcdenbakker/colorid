@@ -5,11 +5,15 @@ extern crate clap;
 use bigs_id::bigsi;
 use bigs_id::build;
 use clap::{App, AppSettings, Arg, SubCommand};
+use std::alloc::System;
 use std::time::SystemTime;
+
+#[global_allocator]
+static GLOBAL: System = System;
 
 fn main() {
     let matches = App::new("bigs_id")
-        .version("0.4.1")
+        .version("0.4.2")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .setting(AppSettings::ArgRequiredElseHelp)
@@ -233,12 +237,12 @@ fn main() {
                         .long("query"),
                 )
                 .arg(
-                    Arg::with_name("compressed")
-                        .help("If set to 'true', it is assumed a gz compressed index is used")
+                    Arg::with_name("batch")
+                        .help("Sets size of batch of reads to be processed in parallel, currently only implemented for minimizers")
                         .required(false)
                         .short("c")
                         .takes_value(true)
-                        .long("compressed"),
+                        .long("batch"),
                 )
                 .arg(
                     Arg::with_name("threads")
@@ -459,36 +463,83 @@ fn main() {
         let threads = value_t!(matches, "threads", usize).unwrap_or(0);
         let down_sample = value_t!(matches, "down_sample", usize).unwrap_or(1);
         let correct = value_t!(matches, "fp_correct", f64).unwrap_or(3.0);
-        let fp_correct = 1.0 / 10f64.powf(correct);
+        let fp_correct = 10f64.powf(-correct);
         let index = matches.value_of("bigsi").unwrap();
+        let batch = value_t!(matches, "batch", usize).unwrap_or(50000);
         eprintln!("Loading index");
         if index.ends_with(".mxi") {
-            let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size, m_size) =
-                bigsi::read_bigsi_mini(matches.value_of("bigsi").unwrap());
-            match bigsi_time.elapsed() {
-                Ok(elapsed) => {
-                    eprintln!("Index loaded in {} seconds", elapsed.as_secs());
+            let (
+                    bigsi_map,
+                    colors_accession,
+                    n_ref_kmers,
+                    bloom_size,
+                    num_hash,
+                    k_size,
+                    m_size,
+                ) = bigsi::read_bigsi_mini(matches.value_of("bigsi").unwrap());
+                match bigsi_time.elapsed() {
+                    Ok(elapsed) => {
+                        eprintln!("Index loaded in {} seconds", elapsed.as_secs());
+                    }
+                    Err(e) => {
+                        // an error occurred!
+                        eprintln!("Error: {:?}", e);
+                    }
                 }
-                Err(e) => {
-                    // an error occurred!
-                    eprintln!("Error: {:?}", e);
+            if fq[0].ends_with(".gz") {
+                let tax_map = if fq.len() > 1 {
+                    bigs_id::read_id_mt_pe::per_read_stream_mini_pe(
+                        //let tax_map = bigs_id::read_id_mt_pe::per_read_search_minimizer(
+                        fq,
+                        &bigsi_map,
+                        &colors_accession,
+                        &n_ref_kmers,
+                        bloom_size,
+                        num_hash,
+                        k_size,
+                        m_size,
+                        threads,
+                        down_sample,
+                        fp_correct,
+                        batch,
+                    )
+                } else {
+                    bigs_id::read_id_mt_pe::per_read_stream_mini_se(
+                        //let tax_map = bigs_id::read_id_mt_pe::per_read_search_minimizer(
+                        fq,
+                        &bigsi_map,
+                        &colors_accession,
+                        &n_ref_kmers,
+                        bloom_size,
+                        num_hash,
+                        k_size,
+                        m_size,
+                        threads,
+                        down_sample,
+                        fp_correct,
+                        batch,
+                    )
+                };
+                for (k, v) in tax_map {
+                    println!("{}: {}", k, v);
                 }
-            }
-            let tax_map = bigs_id::read_id_mt_pe::per_read_search_minimizer(
-                fq,
-                bigsi_map,
-                &colors_accession,
-                &n_ref_kmers,
-                bloom_size,
-                num_hash,
-                k_size,
-                m_size,
-                threads,
-                down_sample,
-                fp_correct,
-            );
-            for (k, v) in tax_map {
-                println!("{}: {}", k, v);
+            } else {
+                let tax_map = bigs_id::read_id_mt_pe::per_read_search_mini(
+                    fq,
+                    bigsi_map,
+                    &colors_accession,
+                    &n_ref_kmers,
+                    bloom_size,
+                    num_hash,
+                    k_size,
+                    m_size,
+                    threads,
+                    down_sample,
+                    fp_correct,
+                );
+                for (k, v) in tax_map {
+                    println!("{}: {}", k, v);
+                }
             }
         } else {
             let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
@@ -502,20 +553,55 @@ fn main() {
                     eprintln!("Error: {:?}", e);
                 }
             }
-            let tax_map = bigs_id::read_id_mt_pe::per_read_search(
-                fq,
-                bigsi_map,
-                &colors_accession,
-                &n_ref_kmers,
-                bloom_size,
-                num_hash,
-                k_size,
-                threads,
-                down_sample,
-                fp_correct,
-            );
-            for (k, v) in tax_map {
-                println!("{}: {}", k, v);
+            if fq[0].ends_with(".gz") {
+                let tax_map = if fq.len() > 1 {
+                    bigs_id::read_id_mt_pe::per_read_stream_pe(
+                        fq,
+                        &bigsi_map,
+                        &colors_accession,
+                        &n_ref_kmers,
+                        bloom_size,
+                        num_hash,
+                        k_size,
+                        threads,
+                        down_sample,
+                        fp_correct,
+                        batch,
+                    )
+                } else {
+                    bigs_id::read_id_mt_pe::per_read_stream_se(
+                        fq,
+                        &bigsi_map,
+                        &colors_accession,
+                        &n_ref_kmers,
+                        bloom_size,
+                        num_hash,
+                        k_size,
+                        threads,
+                        down_sample,
+                        fp_correct,
+                        batch,
+                    )
+                };
+                for (k, v) in tax_map {
+                    println!("{}: {}", k, v);
+                }
+            } else {
+                let tax_map = bigs_id::read_id_mt_pe::per_read_search(
+                    fq,
+                    bigsi_map,
+                    &colors_accession,
+                    &n_ref_kmers,
+                    bloom_size,
+                    num_hash,
+                    k_size,
+                    threads,
+                    down_sample,
+                    fp_correct,
+                );
+                for (k, v) in tax_map {
+                    println!("{}: {}", k, v);
+                }
             }
         }
     }
