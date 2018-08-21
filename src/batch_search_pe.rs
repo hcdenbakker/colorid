@@ -106,7 +106,7 @@ pub fn batch_search(
             eprintln!("{}", file1);
             eprintln!("Counting k-mers, this may take a while!");
             let vec_query = kmer::read_fasta(file1.to_owned().to_string());
-            let unfiltered = kmer::kmerize_vector(vec_query, k_size);
+            let unfiltered = kmer::kmerize_vector(vec_query, k_size, 0);
             let kmers_query = if gene_search {
                 kmer::clean_map(unfiltered, 0)
             } else if filter < 0 {

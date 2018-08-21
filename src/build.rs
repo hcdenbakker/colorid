@@ -69,7 +69,7 @@ pub fn build_single(
                 bit_map.insert(accession, filter.bits);
             } else {
                 let vec = kmer::read_fasta(v[0].to_string());
-                let kmers = kmer::kmerize_vector(vec, k_size);
+                let kmers = kmer::kmerize_vector(vec, k_size, 0);
                 ref_kmer.insert(accession.to_string(), kmers.len());
                 let mut filter =
                     simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
@@ -83,6 +83,7 @@ pub fn build_single(
     for accession in map.keys() {
         accessions.push(accession);
     }
+    accessions.sort();
     //create hash table with colors for accessions
     let num_taxa = accessions.len();
     let mut accession_colors = HashMap::with_capacity(accessions.len());
@@ -165,7 +166,7 @@ pub fn build_multi(
                     (l.0, filter.bits, kmers.len())
                 } else {
                     let vec = kmer::read_fasta(l.1[0].to_string());
-                    let kmers = kmer::kmerize_vector(vec, k_size);
+                    let kmers = kmer::kmerize_vector(vec, k_size, 0);
                     let mut filter =
                         simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
                     for kmer in kmers.keys() {
@@ -183,6 +184,7 @@ pub fn build_multi(
     for accession in map.keys() {
         accessions.push(accession);
     }
+    accessions.sort();
     //create hash table with colors for accessions
     let num_taxa = accessions.len();
     let mut accession_colors = HashMap::with_capacity(accessions.len());
@@ -267,7 +269,7 @@ pub fn build_multi_mini(
                     (l.0, filter.bits, kmers.len())
                 } else {
                     let vec = kmer::read_fasta(l.1[0].to_string());
-                    let kmers = kmer::minimerize_vector(vec, k_size, m);
+                    let kmers = kmer::minimerize_vector(vec, k_size, m, 0);
                     let mut filter =
                         simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
                     for kmer in kmers.keys() {
@@ -285,6 +287,7 @@ pub fn build_multi_mini(
     for accession in map.keys() {
         accessions.push(accession);
     }
+    accessions.sort();
     //create hash table with colors for accessions
     let num_taxa = accessions.len();
     let mut accession_colors = HashMap::with_capacity(accessions.len());
@@ -296,6 +299,7 @@ pub fn build_multi_mini(
     eprintln!("Creation of index, this may take a while!");
     //create actual index, the most straight forward way, but not very efficient
     let mut bigsi_map = HashMap::new();
+    //this can be done in parallel!
     for i in 0..bloom_size {
         let mut bitvec = BitVec::from_elem(num_taxa, false);
         for (t, s) in &bit_map {
@@ -354,7 +358,7 @@ pub fn build_single_mini(
                 bit_map.insert(accession, filter.bits);
             } else {
                 let vec = kmer::read_fasta(v[0].to_string());
-                let kmers = kmer::kmerize_vector(vec, k_size);
+                let kmers = kmer::kmerize_vector(vec, k_size, 0);
                 ref_kmer.insert(accession.to_string(), kmers.len());
                 let mut filter =
                     simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
@@ -368,6 +372,7 @@ pub fn build_single_mini(
     for accession in map.keys() {
         accessions.push(accession);
     }
+    accessions.sort();
     //create hash table with colors for accessions
     let num_taxa = accessions.len();
     let mut accession_colors = HashMap::with_capacity(accessions.len());
