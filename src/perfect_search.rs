@@ -18,7 +18,7 @@ pub fn batch_search(
         //only fasta formatted file!
         eprintln!("Counting k-mers, this may take a while!");
         let vec_query = kmer::read_fasta(file.to_owned());
-        let kmers_query = kmer::kmerize_vector(vec_query, k_size);
+        let kmers_query = kmer::kmerize_vector(vec_query, k_size, 0);
         //let kmers_query = kmer_fa::clean_map(unfiltered, filter);
         eprintln!("{} kmers in query", kmers_query.len());
         let mut kmer_slices = Vec::new();
