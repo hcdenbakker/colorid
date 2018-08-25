@@ -69,7 +69,7 @@ pub fn build_single(
                 bit_map.insert(accession, filter.bits);
             } else {
                 let vec = kmer::read_fasta(v[0].to_string());
-                let kmers = kmer::kmerize_vector(vec, k_size, 0);
+                let kmers = kmer::kmerize_vector(vec, k_size, 1);
                 ref_kmer.insert(accession.to_string(), kmers.len());
                 let mut filter =
                     simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
@@ -166,7 +166,7 @@ pub fn build_multi(
                     (l.0, filter.bits, kmers.len())
                 } else {
                     let vec = kmer::read_fasta(l.1[0].to_string());
-                    let kmers = kmer::kmerize_vector(vec, k_size, 0);
+                    let kmers = kmer::kmerize_vector(vec, k_size, 1);
                     let mut filter =
                         simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
                     for kmer in kmers.keys() {
