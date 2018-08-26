@@ -253,6 +253,14 @@ fn main() {
                         .long("threads"),
                 )
                 .arg(
+                    Arg::with_name("prefix")
+                        .help("prefix for output file(-s)")
+                        .required(true)
+                        .short("n") //running out of options here!
+                        .takes_value(true)
+                        .long("prefix"),
+                )
+                .arg(
                     Arg::with_name("down_sample")
                         .help("down-sample k-mers used for read classification, default 1; increases speed at cost of decreased sensitivity ")
                         .required(false)
@@ -269,8 +277,55 @@ fn main() {
                         .long("fp_correct"),
                 ),
         )
-        .get_matches();
-
+        .subcommand(
+            SubCommand::with_name("read_filter")
+                .about("filters reads")
+                .version("0.1")
+                .author("Henk den Bakker. <henkcdenbakker@gmail.com>")
+                .setting(AppSettings::ArgRequiredElseHelp)
+                .arg(
+                    Arg::with_name("classification")
+                        .short("c")
+                        .long("classification")
+                        .required(true)
+                        .takes_value(true)
+                        .help("tab delimited read classification file generated with the read_id subcommand"),
+                        )
+                .arg(
+                    Arg::with_name("files")
+                        .help("query file(-s)fastq.gz")
+                        .required(true)
+                        .min_values(1)
+                        .short("f")
+                        .takes_value(true)
+                        .long("files"),
+                )
+                .arg(
+                    Arg::with_name("taxon")
+                        .help("taxon to be in- or excluded from the read file(-s)")
+                        .required(true)
+                        .short("t")
+                        .takes_value(true)
+                        .long("taxon"),
+                        )
+                .arg(
+                    Arg::with_name("prefix")
+                        .help("prefix for output file(-s)")
+                        .required(true)
+                        .short("p")
+                        .takes_value(true)
+                        .long("prefix"),
+                        )
+                .arg(
+                    Arg::with_name("exclude")
+                        .help("If set('-e or --exclude'), reads for which the classification contains the taxon name will be excluded")
+                        .required(false)
+                        .short("e")
+                        .takes_value(false)
+                        .long("exclude"),
+                ),
+          )
+              .get_matches();
     if let Some(matches) = matches.subcommand_matches("build") {
         println!(" Ref_file : {}", matches.value_of("ref_file").unwrap());
         println!(" Bigsi file : {}", matches.value_of("bigsi").unwrap());
@@ -453,8 +508,6 @@ fn main() {
                 println!("{}", a);
             }
         }
-        //let accessions_sorted = accessions.sort_by(|a, b| b.cmp(a));
-        //println!("{}", accessions_sorted.len());
     }
     if let Some(matches) = matches.subcommand_matches("read_id") {
         let bigsi_time = SystemTime::now();
@@ -465,31 +518,24 @@ fn main() {
         let correct = value_t!(matches, "fp_correct", f64).unwrap_or(3.0);
         let fp_correct = 10f64.powf(-correct);
         let index = matches.value_of("bigsi").unwrap();
+        let prefix = matches.value_of("prefix").unwrap();
         let batch = value_t!(matches, "batch", usize).unwrap_or(50000);
         eprintln!("Loading index");
         if index.ends_with(".mxi") {
-            let (
-                    bigsi_map,
-                    colors_accession,
-                    n_ref_kmers,
-                    bloom_size,
-                    num_hash,
-                    k_size,
-                    m_size,
-                ) = bigsi::read_bigsi_mini(matches.value_of("bigsi").unwrap());
-                match bigsi_time.elapsed() {
-                    Ok(elapsed) => {
-                        eprintln!("Index loaded in {} seconds", elapsed.as_secs());
-                    }
-                    Err(e) => {
-                        // an error occurred!
-                        eprintln!("Error: {:?}", e);
-                    }
+            let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size, m_size) =
+                bigsi::read_bigsi_mini(matches.value_of("bigsi").unwrap());
+            match bigsi_time.elapsed() {
+                Ok(elapsed) => {
+                    eprintln!("Index loaded in {} seconds", elapsed.as_secs());
                 }
+                Err(e) => {
+                    // an error occurred!
+                    eprintln!("Error: {:?}", e);
+                }
+            }
             if fq[0].ends_with(".gz") {
                 let tax_map = if fq.len() > 1 {
-                    bigs_id::read_id_mt_pe::per_read_stream_mini_pe(
-                        //let tax_map = bigs_id::read_id_mt_pe::per_read_search_minimizer(
+                    bigs_id::read_id_mt_pe::per_read_stream_pe(
                         fq,
                         &bigsi_map,
                         &colors_accession,
@@ -502,10 +548,10 @@ fn main() {
                         down_sample,
                         fp_correct,
                         batch,
+                        prefix,
                     )
                 } else {
-                    bigs_id::read_id_mt_pe::per_read_stream_mini_se(
-                        //let tax_map = bigs_id::read_id_mt_pe::per_read_search_minimizer(
+                    bigs_id::read_id_mt_pe::per_read_stream_se(
                         fq,
                         &bigsi_map,
                         &colors_accession,
@@ -518,13 +564,14 @@ fn main() {
                         down_sample,
                         fp_correct,
                         batch,
+                        prefix,
                     )
                 };
                 for (k, v) in tax_map {
                     println!("{}: {}", k, v);
                 }
             } else {
-                let tax_map = bigs_id::read_id_mt_pe::per_read_search_mini(
+                let tax_map = bigs_id::read_id_mt_pe::per_read_search(
                     fq,
                     bigsi_map,
                     &colors_accession,
@@ -563,10 +610,12 @@ fn main() {
                         bloom_size,
                         num_hash,
                         k_size,
+                        0,
                         threads,
                         down_sample,
                         fp_correct,
                         batch,
+                        prefix,
                     )
                 } else {
                     bigs_id::read_id_mt_pe::per_read_stream_se(
@@ -577,10 +626,12 @@ fn main() {
                         bloom_size,
                         num_hash,
                         k_size,
+                        0,
                         threads,
                         down_sample,
                         fp_correct,
                         batch,
+                        prefix,
                     )
                 };
                 for (k, v) in tax_map {
@@ -595,6 +646,7 @@ fn main() {
                     bloom_size,
                     num_hash,
                     k_size,
+                    0,
                     threads,
                     down_sample,
                     fp_correct,
@@ -603,6 +655,19 @@ fn main() {
                     println!("{}: {}", k, v);
                 }
             }
+        }
+    }
+    if let Some(matches) = matches.subcommand_matches("read_filter") {
+        let classification = matches.value_of("classification").unwrap();
+        let files: Vec<_> = matches.values_of("files").unwrap().collect();
+        let taxon = matches.value_of("taxon").unwrap();
+        let prefix = matches.value_of("prefix").unwrap();
+        let exclude = matches.is_present("exclude");
+        let map = bigs_id::read_filter::tab_to_map(classification.to_string());
+        if files.len() == 1{
+        bigs_id::read_filter::read_filter_se(map, files, taxon, prefix, exclude);
+        }else{
+            bigs_id::read_filter::read_filter_pe(map, files, taxon, prefix, exclude);
         }
     }
 }
