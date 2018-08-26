@@ -76,7 +76,7 @@ In the first column we find the query, the second column shows the number of k-m
 
 This is the main use case described in the biorxiv pre-print. Implemented are two algorithms, the `-g` algorithm, which allows for imperfect matches, and the fast `-s` algorithm, which reports only perfect matches.
 
-In this case I assume we have couple of hundred unassembled Listeria monocytogenes genomes, and we want to check for the presence a cadmium resistance gene (e.g., CadB) in our sequenced genomes.
+In this case I assume we have couple of hundred unassembled Listeria monocytogenes genomes, and we want to check for the presence a specific gene in our sequenced genomes.
 
 First we need to make a 'reference file' for the files we want to query. I like to use a simple bash loop to do this:
 ```
@@ -94,21 +94,22 @@ This command will perform a build in 24 threads.
 
 Now it is time for the search!
 
-``` ./target/release/bigs_id search -b 30M_2H_K21.bxi -q pLM33_CadB.fasta -g ```
+``` ./target/release/bigs_id search -b 30M_2H_K21.bxi -q geneX.fasta -g ```
 
 When we use this subcommand we get results presented as follows:
-```ex1: 1.00
-ex2: 0.99
-ex3: 0.97
-ex4: 0.74
-ex5: 1.00
+```
+geneX.fasta	ex1	1143	0.964
+geneX.fasta	ex2	1143	1.000
+geneX.fasta	ex3	1143	1.000
+geneX.fasta	ex4	1143	0.982
+geneX.fasta	ex5	1143	0.982
 ```
 
-The first column gives us the accesion in the index, the second the proportion of k-mers of our query that were found in this accession. The `-s' results just consist of one column, the accessions for which a perfect match for the query was found.
+The first column gives us the query name, the second accesion in the index with a hit, the third the number of kmers in the query, and the fourth the proportion of k-mers of our query that were found in this accession. The `-s` flag will present the results in a similar way, only presenting perfect matches.  
 
 ## Classifying reads with read_id
 
-This subcommand uses a simple majority-rule algorithm to classify reads. Write up to follow soon! 
+This subcommand uses a simple majority-rule algorithm to classify reads, and the results can be used with the read_filter subcommand to either create a read file for a specific taxon, or filter a specific taxon from a read file. Write up to follow soon! 
 
 ## Acknowledgements
 Lee Katz (https://github.com/lskatz) for his help with setting up Travis CI! 
