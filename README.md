@@ -62,15 +62,15 @@ Note! These parameters work well for single isolate, mixed samples with a few sp
 
 ### 2. Search
 
-``` ./target/release/bigs_id search -b test.bxi -q your_query.fastq.gz ```
+``` ./target/release/bigs_id search -b test.bxi -q SRR4098796_1.fastq.gz -r SRR4098796_2.fastq.gz ```
 
 ### 3. results
 With the default settings `bigs_id` will report reference sequences that share >35% of their k-mers with the query (more about this threshold to follow later). Here is the output of a search with SRA accession SRR4098796 (L. monocytogenes lineage I) as query:
 ```
-Listeria_monocytogenes_F2365: 0.87 68.43 64 664676
-Listeria_monocytogenes_SRR2167842: 0.40 62.65 2 11416
+SRR4098796_1.fastq.gz	3076072	Listeria_monocytogenes_F2365	0.87	134.25	126	475266
+SRR4098796_1.fastq.gz	3076072	Listeria_monocytogenes_SRR2167842	0.40	128.25	122	7831
 ```
-In the first column we find the reference sequence, the second column shows the proportion of k-mers in the reference shared with the query, the third column displays the average coverage based on k-mers that were uniquely matched with this reference, the fourth the modus of the coverage based on uniquely matched k-mers and the last column the number of uniquely matched k-mers.
+In the first column we find the query, the second column shows the number of k-mers in the query, the third column displays the reference sequence, the fourth column the proportion of kmers in the reference shared with the query, the fifth column displays the average coverage based on k-mers that were uniquely matched with this reference, the sixth the modus of the coverage based on uniquely matched k-mers and the last column the number of uniquely matched k-mers.
 
 ## Interrogate unassembled genome data for the presence of specific genes:
 
