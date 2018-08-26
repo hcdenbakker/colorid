@@ -31,11 +31,12 @@ FLAGS:
     -V, --version    Prints version information
 
 SUBCOMMANDS:
-    build      builds a bigsi
-    help       Prints this message or the help of the given subcommand(s)
-    info       dumps index parameters and accessions
-    read_id    id's reads
-    search     does a bigsi search on one or more fasta/fastq.gz files
+    build          builds a bigsi
+    help           Prints this message or the help of the given subcommand(s)
+    info           dumps index parameters and accessions
+    read_filter    filters reads
+    read_id        id's reads
+    search         does a bigsi search on one or more fasta/fastq.gz file
 ```
 
 # Example uses:
@@ -55,7 +56,7 @@ Infer k-mer similarity between a query fasta/fastq.gz file and an index of refer
 
 ### 1. Create index
 
-``` ./target/release/bigs_id build -r ref_file_example.txt -b test.bxi -k 31 -s 50000000 -n 4```
+``` ./target/release/bigs_id build -r ref_file_example.txt -b test -k 31 -s 50000000 -n 4```
 
 Note! These parameters work well for single isolate, mixed samples with a few species. For complex metagenomic samples the BIGSI parameters need to be adjusted to adjust the false positive rate.
 
