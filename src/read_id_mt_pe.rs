@@ -265,15 +265,10 @@ pub fn per_read_search(
                 "too_short"
             } else {
                 let map = if m == 0 {
-                            kmer::kmerize_vector(r.to_vec(), k, d)
-                        } else {
-                            kmer::minimerize_vector(
-                                r.to_vec(),
-                                k,
-                                m,
-                                d,
-                            )
-                        };
+                    kmer::kmerize_vector(r.to_vec(), k, d)
+                } else {
+                    kmer::minimerize_vector(r.to_vec(), k, m, d)
+                };
                 let report = search_index(&child_bigsi, &map, bloom_size, num_hash, no_hits_num);
                 if report.is_empty() {
                     "no_hits"
@@ -309,7 +304,6 @@ pub fn per_read_search(
     }
     tax_map
 }
-
 
 pub fn per_read_stream_pe(
     filenames: Vec<&str>,
@@ -420,9 +414,7 @@ pub fn per_read_stream_pe(
         .map(|r| {
             let child_bigsi = my_bigsi.clone();
             let child_fp = false_positive_p_arc.clone();
-            if (r.len() == 2) && (r[1].len() < k) {
-                (r[0].to_owned(), "too_short")
-            } else if (r[1].len() < k) && (r[4].len() < k) {
+            if (r[1].len() < k) && (r[4].len() < k) {
                 (r[0].to_owned(), "too_short")
             } else {
                 let map = if m == 0 {
@@ -514,6 +506,7 @@ pub fn per_read_stream_se(
         .build_global()
         .unwrap();
     let false_positive_p = false_prob_map(colors_accession, ref_kmers_in, bloom_size, num_hash);
+
     let my_bigsi: Arc<&std::collections::HashMap<usize, Vec<u8>>> = Arc::new(bigsi_map);
     let false_positive_p_arc: Arc<std::collections::HashMap<usize, f64>> =
         Arc::new(false_positive_p);
@@ -532,7 +525,7 @@ pub fn per_read_stream_se(
                 .map(|r| {
                     let child_bigsi = my_bigsi.clone();
                     let child_fp = false_positive_p_arc.clone();
-                    if (r.len() == 2) && (r[1].len() < k) {
+                    if r[1].len() < k {
                         (r[0].to_owned(), "too_short")
                     } else {
                         let map = if m == 0 {
@@ -572,7 +565,7 @@ pub fn per_read_stream_se(
         .map(|r| {
             let child_bigsi = my_bigsi.clone();
             let child_fp = false_positive_p_arc.clone();
-            if (r.len() == 1) && (r[0].len() < k) {
+            if r[1].len() < k {
                 (r[0].to_owned(), "too_short")
             } else {
                 let map = if m == 0 {
@@ -631,4 +624,3 @@ pub fn per_read_stream_se(
     }
     tax_map
 }
-
