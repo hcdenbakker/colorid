@@ -367,9 +367,7 @@ pub fn per_read_stream_pe(
                 .map(|r| {
                     let child_bigsi = my_bigsi.clone();
                     let child_fp = false_positive_p_arc.clone();
-                    if (r.len() == 2) && (r[1].len() < k) {
-                        (r[0].to_owned(), "too_short")
-                    } else if (r[1].len() < k) && (r[2].len() < k) {
+                    if (r[1].len() < k) || (r[2].len() < k) {
                         (r[0].to_owned(), "too_short")
                     } else {
                         let map = if m == 0 {
@@ -414,7 +412,7 @@ pub fn per_read_stream_pe(
         .map(|r| {
             let child_bigsi = my_bigsi.clone();
             let child_fp = false_positive_p_arc.clone();
-            if (r[1].len() < k) && (r[4].len() < k) {
+            if (r[1].len() < k) || (r[2].len() < k) {
                 (r[0].to_owned(), "too_short")
             } else {
                 let map = if m == 0 {
