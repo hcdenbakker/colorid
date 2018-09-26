@@ -16,7 +16,7 @@ fi
 
 #simple read classifier
 echo "Classifying reads"
-./target/debug/bigs_id read_id -b ./test_data/phage.bxi -q ./test_data/SRR548019.fastq.gz > classification.out
+./target/debug/bigs_id read_id -b ./test_data/phage.bxi -q ./test_data/SRR548019.fastq.gz -n test_read_id -d 10
 if [ $? -gt 0 ]; then
   echo "ERROR classifying reads ./test_data/SRR548019.fastq.gz with ./test_data/phage.bxi"
   exit 1
@@ -35,7 +35,7 @@ fi
 
 # Test the output k-mer search
 echo "Testing the output";
-declare -a expected=(./test_data/SRR548019.fastq.gz	244500	Listeria_phage_B056	1.00	206.20	35	26711)
+declare -a expected=(./test_data/SRR548019.fastq.gz	244500	Listeria_phage_B056	1.00	206.20	35	26691)
 lastIndex=$((${#expected[@]} - 1))
 #echo "$lastIndex .. ${expected[@]}"
 for i in $(seq 0 $lastIndex); do

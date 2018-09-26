@@ -1,9 +1,8 @@
 //simple bloom filter implementation with publicly accessible bit vectors
 extern crate bit_vec;
-extern crate murmurhash64;
 
 use bit_vec::BitVec;
-use murmurhash64::murmur_hash64a;
+use fasthash;
 
 pub struct BloomFilter {
     pub bits: BitVec,      // Bit vector
@@ -21,7 +20,7 @@ impl BloomFilter {
         // Generate a bit index for each of the hash functions needed
         for i in 0..self.num_hashes {
             let bit_index =
-                (murmur_hash64a(value.as_bytes(), i as u64) % (self.bits.len() as u64)) as u64;
+                (fasthash::xx::hash64_with_seed(&value.as_bytes(), i as u64) % (self.bits.len() as u64)) as u64;
             self.bits.set(bit_index as usize, true);
         }
     }
@@ -29,7 +28,7 @@ impl BloomFilter {
     pub fn contains(&self, value: &str) -> bool {
         for i in 0..self.num_hashes {
             let bit_index =
-                (murmur_hash64a(value.as_bytes(), i as u64) % (self.bits.len() as u64)) as u64;
+                (fasthash::xx::hash64_with_seed(&value.as_bytes(), i as u64) % (self.bits.len() as u64)) as u64;
 
             if self.bits[bit_index as usize] == false {
                 return false;
