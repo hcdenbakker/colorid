@@ -1,6 +1,6 @@
 [package]
-name = "bigs_id"
-version = "0.4.1"
+name = "colorid"
+version = "0.1.0"
 authors = ["henk den bakker"]
 
 [dependencies]
