@@ -15,7 +15,7 @@ Clone this repository:
 
 ```git clone https://github.com/hcdenbakker/colorid.git```
 
-Get into the bigs_id directory:
+Get into the colorid directory:
 ```cd colorid```
 
 And build your binary:
@@ -65,7 +65,7 @@ Note! These parameters work well for single isolate, mixed samples with a few sp
 ``` ./target/release/colorid search -b test.bxi -q SRR4098796_1.fastq.gz -r SRR4098796_2.fastq.gz ```
 
 ### 3. results
-With the default settings `bigs_id` will report reference sequences that share >35% of their k-mers with the query (more about this threshold to follow later). Here is the output of a search with SRA accession SRR4098796 (L. monocytogenes lineage I) as query:
+With the default settings `colorid` will report reference sequences that share >35% of their k-mers with the query (more about this threshold to follow later). Here is the output of a search with SRA accession SRR4098796 (L. monocytogenes lineage I) as query:
 ```
 SRR4098796_1.fastq.gz	3076072	Listeria_monocytogenes_F2365	0.87	134.25	126	475266
 SRR4098796_1.fastq.gz	3076072	Listeria_monocytogenes_SRR2167842	0.40	128.25	122	7831
