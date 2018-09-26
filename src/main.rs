@@ -1,11 +1,11 @@
-extern crate bigs_id;
+extern crate colorid;
 #[macro_use]
 extern crate clap;
 
-use bigs_id::bigsi;
-use bigs_id::build;
-use bigs_id::build_ex;
-use bigs_id::read_id_mt_pe::false_prob;
+use colorid::bigsi;
+use colorid::build;
+use colorid::build_ex;
+use colorid::read_id_mt_pe::false_prob;
 use clap::{App, AppSettings, Arg, SubCommand};
 use std::alloc::System;
 use std::time::SystemTime;
@@ -14,8 +14,8 @@ use std::time::SystemTime;
 static GLOBAL: System = System;
 
 fn main() {
-    let matches = App::new("bigs_id")
-        .version("0.4.2")
+    let matches = App::new("colorid")
+        .version("0.1.0")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .setting(AppSettings::ArgRequiredElseHelp)
@@ -415,7 +415,7 @@ fn main() {
             if perfect_search {
                 if multi_fasta {
                     //make 'perfect' batch....
-                    bigs_id::perfect_search::batch_search_mf(
+                    colorid::perfect_search::batch_search_mf(
                         files1,
                         &bigsi_map,
                         &colors_accession,
@@ -426,7 +426,7 @@ fn main() {
                         cov,
                     )
                 } else {
-                    bigs_id::perfect_search::batch_search(
+                    colorid::perfect_search::batch_search(
                         files1,
                         &bigsi_map,
                         &colors_accession,
@@ -438,7 +438,7 @@ fn main() {
                     )
                 }
             } else {
-                bigs_id::batch_search_pe::batch_search(
+                colorid::batch_search_pe::batch_search(
                     files1,
                     files2,
                     &bigsi_map,
@@ -549,7 +549,7 @@ fn main() {
             }
             if fq[0].ends_with(".gz") {
                 if fq.len() > 1 {
-                    bigs_id::read_id_mt_pe::per_read_stream_pe(
+                    colorid::read_id_mt_pe::per_read_stream_pe(
                         fq,
                         &bigsi_map,
                         &colors_accession,
@@ -565,7 +565,7 @@ fn main() {
                         prefix,
                     )
                 } else {
-                    bigs_id::read_id_mt_pe::per_read_stream_se(
+                    colorid::read_id_mt_pe::per_read_stream_se(
                         fq,
                         &bigsi_map,
                         &colors_accession,
@@ -581,9 +581,8 @@ fn main() {
                         prefix,
                     )
                 };
-            //bigs_id::reports::read_counts( prefix.to_owned() + "_reads.txt",prefix);
             } else {
-                bigs_id::read_id_mt_pe::stream_fasta(
+                colorid::read_id_mt_pe::stream_fasta(
                     fq,
                     &bigsi_map,
                     &colors_accession,
@@ -598,7 +597,6 @@ fn main() {
                     batch,
                     prefix,
                 );
-                //bigs_id::reports::read_counts( prefix.to_owned() + "_reads.txt",prefix);
             }
         } else {
             let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
@@ -614,7 +612,7 @@ fn main() {
             }
             if fq[0].ends_with(".gz") {
                 if fq.len() > 1 {
-                    bigs_id::read_id_mt_pe::per_read_stream_pe(
+                    colorid::read_id_mt_pe::per_read_stream_pe(
                         fq,
                         &bigsi_map,
                         &colors_accession,
@@ -630,7 +628,7 @@ fn main() {
                         prefix,
                     )
                 } else {
-                    bigs_id::read_id_mt_pe::per_read_stream_se(
+                    colorid::read_id_mt_pe::per_read_stream_se(
                         fq,
                         &bigsi_map,
                         &colors_accession,
@@ -648,7 +646,7 @@ fn main() {
                 };
             } else {
                 //let tax_map = bigs_id::read_id_mt_pe_ex::stream_fasta(
-                bigs_id::read_id_mt_pe::stream_fasta(
+                colorid::read_id_mt_pe::stream_fasta(
                     fq,
                     &bigsi_map,
                     &colors_accession,
@@ -663,13 +661,9 @@ fn main() {
                     batch,
                     prefix,
                 );
-                //bigs_id::reports::read_counts( prefix.to_owned() + "_reads.txt",prefix);
-                //for (k, v) in tax_map {
-                //    println!("{}: {}", k, v);
-                //}
             }
         }
-        bigs_id::reports::read_counts(prefix.to_owned() + "_reads.txt", prefix);
+        colorid::reports::read_counts(prefix.to_owned() + "_reads.txt", prefix);
     }
     if let Some(matches) = matches.subcommand_matches("read_filter") {
         let classification = matches.value_of("classification").unwrap();
@@ -677,11 +671,11 @@ fn main() {
         let taxon = matches.value_of("taxon").unwrap();
         let prefix = matches.value_of("prefix").unwrap();
         let exclude = matches.is_present("exclude");
-        let map = bigs_id::read_filter::tab_to_map(classification.to_string(), taxon);
+        let map = colorid::read_filter::tab_to_map(classification.to_string(), taxon);
         if files.len() == 1 {
-            bigs_id::read_filter::read_filter_se(map, files, taxon, prefix, exclude);
+            colorid::read_filter::read_filter_se(map, files, taxon, prefix, exclude);
         } else {
-            bigs_id::read_filter::read_filter_pe(map, files, taxon, prefix, exclude);
+            colorid::read_filter::read_filter_pe(map, files, taxon, prefix, exclude);
         }
     }
 }
