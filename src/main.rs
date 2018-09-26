@@ -4,6 +4,8 @@ extern crate clap;
 
 use bigs_id::bigsi;
 use bigs_id::build;
+use bigs_id::build_ex;
+use bigs_id::read_id_mt_pe::false_prob;
 use clap::{App, AppSettings, Arg, SubCommand};
 use std::alloc::System;
 use std::time::SystemTime;
@@ -342,13 +344,13 @@ fn main() {
         let minimizer = matches.is_present("minimizer");
         //hack to work around current clap bug with default values only being &str
         let minimizer_value: usize = matches.value_of("value").unwrap().parse::<usize>().unwrap();
-        let map = build::tab_to_map(matches.value_of("ref_file").unwrap().to_string());
+        let map = build_ex::tab_to_map(matches.value_of("ref_file").unwrap().to_string());
         if minimizer {
             println!("Build with minimizers, minimizer size: {}", minimizer_value);
             let (bigsi_map, colors_accession, n_ref_kmers) = if threads == 1 {
-                build::build_single_mini(&map, bloom, hashes, kmer, minimizer_value)
+                build_ex::build_single_mini(&map, bloom, hashes, kmer, minimizer_value)
             } else {
-                build::build_multi_mini(&map, bloom, hashes, kmer, minimizer_value, threads)
+                build_ex::build_multi_mini(&map, bloom, hashes, kmer, minimizer_value, threads)
             };
             println!("Saving BIGSI to file.");
             bigsi::save_bigsi_mini(
@@ -363,9 +365,9 @@ fn main() {
             );
         } else {
             let (bigsi_map, colors_accession, n_ref_kmers) = if threads == 1 {
-                build::build_single(&map, bloom, hashes, kmer)
+                build_ex::build_single(&map, bloom, hashes, kmer)
             } else {
-                build::build_multi(&map, bloom, hashes, kmer, threads)
+                build_ex::build_multi(&map, bloom, hashes, kmer, threads)
             };
             println!("Saving BIGSI to file.");
             bigsi::save_bigsi(
@@ -458,7 +460,7 @@ fn main() {
         eprintln!("Loading index");
         let index = matches.value_of("bigsi").unwrap();
         if index.ends_with(".mxi") {
-            let (_bigsi_map, colors_accession, _n_ref_kmers, bloom_size, num_hash, k_size, m_size) =
+            let (_bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size, m_size) =
                 bigsi::read_bigsi_mini(index);
             match bigsi_time.elapsed() {
                 Ok(elapsed) => {
@@ -480,10 +482,16 @@ fn main() {
             }
             accessions.sort_by(|a, b| a.cmp(b));
             for a in accessions {
-                println!("{}", a);
+                let k_size = n_ref_kmers.get(&a).unwrap();
+                println!(
+                    "{} {} {:.3}",
+                    a,
+                    k_size,
+                    false_prob(bloom_size as f64, num_hash as f64, *k_size as f64)
+                );
             }
         } else {
-            let (_bigsi_map, colors_accession, _n_ref_kmers, bloom_size, num_hash, k_size) =
+            let (_bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
                 bigsi::read_bigsi(index);
             match bigsi_time.elapsed() {
                 Ok(elapsed) => {
@@ -505,7 +513,13 @@ fn main() {
             }
             accessions.sort_by(|a, b| a.cmp(b));
             for a in accessions {
-                println!("{}", a);
+                let k_size = n_ref_kmers.get(&a).unwrap();
+                println!(
+                    "{} {} {:.3}",
+                    a,
+                    k_size,
+                    false_prob(bloom_size as f64, num_hash as f64, *k_size as f64)
+                );
             }
         }
     }
@@ -534,7 +548,7 @@ fn main() {
                 }
             }
             if fq[0].ends_with(".gz") {
-                let tax_map = if fq.len() > 1 {
+                if fq.len() > 1 {
                     bigs_id::read_id_mt_pe::per_read_stream_pe(
                         fq,
                         &bigsi_map,
@@ -567,13 +581,11 @@ fn main() {
                         prefix,
                     )
                 };
-                for (k, v) in tax_map {
-                    println!("{}: {}", k, v);
-                }
+            //bigs_id::reports::read_counts( prefix.to_owned() + "_reads.txt",prefix);
             } else {
-                let tax_map = bigs_id::read_id_mt_pe::per_read_search(
+                bigs_id::read_id_mt_pe::stream_fasta(
                     fq,
-                    bigsi_map,
+                    &bigsi_map,
                     &colors_accession,
                     &n_ref_kmers,
                     bloom_size,
@@ -583,10 +595,10 @@ fn main() {
                     threads,
                     down_sample,
                     fp_correct,
+                    batch,
+                    prefix,
                 );
-                for (k, v) in tax_map {
-                    println!("{}: {}", k, v);
-                }
+                //bigs_id::reports::read_counts( prefix.to_owned() + "_reads.txt",prefix);
             }
         } else {
             let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
@@ -601,7 +613,7 @@ fn main() {
                 }
             }
             if fq[0].ends_with(".gz") {
-                let tax_map = if fq.len() > 1 {
+                if fq.len() > 1 {
                     bigs_id::read_id_mt_pe::per_read_stream_pe(
                         fq,
                         &bigsi_map,
@@ -634,13 +646,11 @@ fn main() {
                         prefix,
                     )
                 };
-                for (k, v) in tax_map {
-                    println!("{}: {}", k, v);
-                }
             } else {
-                let tax_map = bigs_id::read_id_mt_pe::per_read_search(
+                //let tax_map = bigs_id::read_id_mt_pe_ex::stream_fasta(
+                bigs_id::read_id_mt_pe::stream_fasta(
                     fq,
-                    bigsi_map,
+                    &bigsi_map,
                     &colors_accession,
                     &n_ref_kmers,
                     bloom_size,
@@ -650,12 +660,16 @@ fn main() {
                     threads,
                     down_sample,
                     fp_correct,
+                    batch,
+                    prefix,
                 );
-                for (k, v) in tax_map {
-                    println!("{}: {}", k, v);
-                }
+                //bigs_id::reports::read_counts( prefix.to_owned() + "_reads.txt",prefix);
+                //for (k, v) in tax_map {
+                //    println!("{}: {}", k, v);
+                //}
             }
         }
+        bigs_id::reports::read_counts(prefix.to_owned() + "_reads.txt", prefix);
     }
     if let Some(matches) = matches.subcommand_matches("read_filter") {
         let classification = matches.value_of("classification").unwrap();
@@ -663,10 +677,10 @@ fn main() {
         let taxon = matches.value_of("taxon").unwrap();
         let prefix = matches.value_of("prefix").unwrap();
         let exclude = matches.is_present("exclude");
-        let map = bigs_id::read_filter::tab_to_map(classification.to_string());
-        if files.len() == 1{
-        bigs_id::read_filter::read_filter_se(map, files, taxon, prefix, exclude);
-        }else{
+        let map = bigs_id::read_filter::tab_to_map(classification.to_string(), taxon);
+        if files.len() == 1 {
+            bigs_id::read_filter::read_filter_se(map, files, taxon, prefix, exclude);
+        } else {
             bigs_id::read_filter::read_filter_pe(map, files, taxon, prefix, exclude);
         }
     }

@@ -1,5 +1,6 @@
 use flate2::read::MultiGzDecoder;
 use std;
+use fnv;
 use std::cmp;
 use std::collections::HashMap;
 use std::fs::File;
@@ -86,8 +87,8 @@ pub fn kmerize_vector(
     v: Vec<String>,
     k: usize,
     d: usize,
-) -> std::collections::HashMap<std::string::String, usize> {
-    let mut map = HashMap::new();
+) -> fnv::FnvHashMap<std::string::String, usize> {
+    let mut map = fnv::FnvHashMap::default();
     for l in v {
         let length_l = l.len();
         let l_r = revcomp(&l);
@@ -99,8 +100,8 @@ pub fn kmerize_vector(
                         .or_insert(0);
                     *count += 1;
                 } else {
-                    let count =
-                        map.entry(
+                    let count = map
+                        .entry(
                             l_r[length_l - (i + k)..length_l - i]
                                 .to_string()
                                 .to_uppercase(),
@@ -117,8 +118,8 @@ pub fn kmerize_vector_uppercase(
     v: Vec<String>,
     k: usize,
     d: usize,
-) -> std::collections::HashMap<std::string::String, usize> {
-    let mut map = HashMap::new();
+) -> fnv::FnvHashMap<std::string::String, usize> {
+    let mut map = fnv::FnvHashMap::default();
     for l in v {
         let length_l = l.len();
         let l_r = revcomp(&l);
@@ -142,8 +143,8 @@ pub fn kmerize_vector_uppercase(
 pub fn kmerize_string(
     l: String,
     k: usize,
-) -> std::collections::HashMap<std::string::String, usize> {
-    let mut map = HashMap::new();
+) -> fnv::FnvHashMap<std::string::String, usize> {
+    let mut map = fnv::FnvHashMap::default();
     let length_l = l.len();
     let l_r = revcomp(&l);
     for i in 0..l.len() - k + 1 {
@@ -153,8 +154,8 @@ pub fn kmerize_string(
                 .or_insert(0);
             *count += 1;
         } else {
-            let count =
-                map.entry(
+            let count = map
+                .entry(
                     l_r[length_l - (i + k)..length_l - i]
                         .to_string()
                         .to_uppercase(),
@@ -170,8 +171,8 @@ pub fn minimerize_vector(
     k: usize,
     m: usize,
     d: usize,
-) -> std::collections::HashMap<std::string::String, usize> {
-    let mut map = HashMap::new();
+) -> fnv::FnvHashMap<std::string::String, usize> {
+    let mut map = fnv::FnvHashMap::default();
     for l in v {
         let length_l = l.len();
         let l_r = revcomp(&l);
@@ -195,9 +196,9 @@ pub fn minimerize_vector(
 pub fn kmers_from_fq(
     filename: String,
     k: usize,
-) -> std::collections::HashMap<std::string::String, usize> {
+) -> fnv::FnvHashMap<std::string::String, usize> {
     let f = File::open(filename).expect("file not found");
-    let mut map = HashMap::new();
+    let mut map = fnv::FnvHashMap::default();
     let mut line_count = 1;
     let d = MultiGzDecoder::new(f);
     for line in io::BufReader::new(d).lines() {
@@ -231,9 +232,9 @@ pub fn kmers_from_fq_minimizer(
     filename: String,
     k: usize,
     m: usize,
-) -> std::collections::HashMap<std::string::String, usize> {
+) -> fnv::FnvHashMap<std::string::String, usize> {
     let f = File::open(filename).expect("file not found");
-    let mut map = HashMap::new();
+    let mut map = fnv::FnvHashMap::default();
     let mut line_count = 1;
     let d = MultiGzDecoder::new(f);
     for line in io::BufReader::new(d).lines() {
@@ -266,8 +267,8 @@ pub fn kmers_from_fq_minimizer(
 pub fn kmers_fq_pe(
     filenames: Vec<&str>,
     k: usize,
-) -> std::collections::HashMap<std::string::String, usize> {
-    let mut map = HashMap::new();
+) -> fnv::FnvHashMap<std::string::String, usize> {
+    let mut map = fnv::FnvHashMap::default();
     for filename in filenames {
         let mut f = File::open(filename).expect("file not found");
         let mut line_count = 1;
@@ -303,8 +304,8 @@ pub fn kmers_fq_pe_minimizer(
     filenames: Vec<&str>,
     k: usize,
     m: usize,
-) -> std::collections::HashMap<std::string::String, usize> {
-    let mut map = HashMap::new();
+) -> fnv::FnvHashMap<std::string::String, usize> {
+    let mut map = fnv::FnvHashMap::default();
     for filename in filenames {
         let mut f = File::open(filename).expect("file not found");
         let mut line_count = 1;
@@ -337,10 +338,10 @@ pub fn kmers_fq_pe_minimizer(
 }
 
 pub fn clean_map(
-    map: std::collections::HashMap<std::string::String, usize>,
+    map: fnv::FnvHashMap<std::string::String, usize>,
     t: usize,
-) -> std::collections::HashMap<std::string::String, usize> {
-    let mut map_clean = HashMap::new();
+) -> fnv::FnvHashMap<std::string::String, usize> {
+    let mut map_clean = fnv::FnvHashMap::default();
     for (key, value) in map {
         if value > t {
             map_clean.insert(key, value);
@@ -376,8 +377,8 @@ fn switch_base(c: char) -> char {
 }
 
 //auto cutoff inference from Zam Iqbal's Cortex
-pub fn auto_cutoff(map: std::collections::HashMap<std::string::String, usize>) -> usize {
-    let mut histo_map = HashMap::new();
+pub fn auto_cutoff(map: fnv::FnvHashMap<std::string::String, usize>) -> usize {
+    let mut histo_map = fnv::FnvHashMap::default();
     for (_key, value) in map {
         *histo_map.entry(value).or_insert(0) += 1;
     }

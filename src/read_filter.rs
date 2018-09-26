@@ -7,14 +7,19 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 
-pub fn tab_to_map(filename: String) -> std::collections::HashMap<std::string::String, String> {
+pub fn tab_to_map(
+    filename: String,
+    query: &str,
+) -> std::collections::HashMap<std::string::String, String> {
     let mut map = HashMap::new();
-    let f = File::open(filename).expect("reference file not found");
+    let f = File::open(filename).expect("classification file not found");
     for line in io::BufReader::new(f).lines() {
         let l = line.unwrap();
         let v: Vec<&str> = l.split('\t').collect();
         let h: Vec<&str> = v[0].split(' ').collect();
-        map.insert(String::from(h[0]), String::from(v[1]));
+        if v[1].contains(query) {
+            map.insert(String::from(h[0]), String::from(v[1]));
+        }
     }
     map
 }
@@ -74,7 +79,7 @@ pub fn read_filter_pe(
                     qual2 = l2.unwrap().to_owned();
                     let v: Vec<&str> = header1.split(' ').collect();
                     if exclude == true {
-                        if !class_map.get(v[0]).unwrap().contains(query) {
+                        if !class_map.contains_key(v[0]) {
                             gz1.write_all(
                                 format!("{}\n{}\n+\n{}\n", header1, seq1, qual1).as_bytes(),
                             );
@@ -84,7 +89,7 @@ pub fn read_filter_pe(
                             excluded += 1;
                         }
                     } else {
-                        if class_map.get(v[0]).unwrap().contains(query) {
+                        if class_map.contains_key(v[0]) {
                             gz1.write_all(
                                 format!("{}\n{}\n+\n{}\n", header1, seq1, qual1).as_bytes(),
                             );
@@ -132,7 +137,8 @@ pub fn read_filter_se(
     let mut qual1 = "".to_string();
     let mut excluded = 0;
     let mut included = 0;
-    let mut fq1 = File::create(format!("{}_{}.fq.gz", prefix, query)).expect("could not create R1!");
+    let mut fq1 =
+        File::create(format!("{}_{}.fq.gz", prefix, query)).expect("could not create R1!");
     let mut gz1 = GzEncoder::new(fq1, Compression::default());
     for line in iter1 {
         let l = line.unwrap();
@@ -144,12 +150,12 @@ pub fn read_filter_se(
             qual1 = l.to_owned();
             let v: Vec<&str> = header1.split(' ').collect();
             if exclude == true {
-                if !class_map.get(v[0]).unwrap().contains(query) {
+                if !class_map.contains_key(v[0]) {
                     gz1.write_all(format!("{}\n{}\n+\n{}\n", header1, seq1, qual1).as_bytes());
                     excluded += 1;
                 }
             } else {
-                if class_map.get(v[0]).unwrap().contains(query) {
+                if class_map.contains_key(v[0]) {
                     gz1.write_all(format!("{}\n{}\n+\n{}\n", header1, seq1, qual1).as_bytes());
                     included += 1;
                 }
@@ -170,4 +176,3 @@ pub fn read_filter_se(
         );
     }
 }
-

@@ -1,6 +1,7 @@
 use bit_vec::BitVec;
 use kmer;
-use murmurhash64::murmur_hash64a;
+use fasthash;
+use fnv;
 use reports;
 use std;
 use std::collections::HashMap;
@@ -9,9 +10,9 @@ use std::time::SystemTime;
 pub fn batch_search(
     files1: Vec<&str>,
     files2: Vec<&str>,
-    bigsi_map: &std::collections::HashMap<usize, Vec<u8>>,
-    colors_accession: &std::collections::HashMap<usize, String>,
-    n_ref_kmers: &std::collections::HashMap<String, usize>,
+    bigsi_map: &fnv::FnvHashMap<usize, Vec<u8>>,
+    colors_accession: &fnv::FnvHashMap<usize, String>,
+    n_ref_kmers: &fnv::FnvHashMap<String, usize>,
     bloom_size: usize,
     num_hash: usize,
     k_size: usize,
@@ -44,7 +45,7 @@ pub fn batch_search(
             for k in kmers_query.keys() {
                 let mut kmer_slices = Vec::new();
                 for i in 0..num_hash {
-                    let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
+                    let bit_index = fasthash::xx::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
                     let bi = bit_index as usize;
                     if !bigsi_map.contains_key(&bi) {
                         break;
@@ -123,7 +124,7 @@ pub fn batch_search(
             for k in kmers_query.keys() {
                 let mut kmer_slices = Vec::new();
                 for i in 0..num_hash {
-                    let bit_index = murmur_hash64a(k.as_bytes(), i as u64) % bloom_size as u64;
+                    let bit_index = fasthash::xx::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
                     let bi = bit_index as usize;
                     if !bigsi_map.contains_key(&bi) {
                         break;

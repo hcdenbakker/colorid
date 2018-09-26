@@ -1,7 +1,8 @@
 extern crate serde;
 
-use bincode::{serialize, deserialize_from, Infinite};
+use bincode::{deserialize_from, serialize, Infinite};
 use std;
+use fnv;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
@@ -12,9 +13,9 @@ pub struct BigsyMap {
     pub bloom_size: usize,
     pub num_hash: usize,
     pub k_size: usize,
-    pub colors: HashMap<usize, String>,
-    pub map: HashMap<usize, Vec<u8>>,
-    pub n_ref_kmers: HashMap<String, usize>,
+    pub colors: fnv::FnvHashMap<usize, String>,
+    pub map: fnv::FnvHashMap<usize, Vec<u8>>,
+    pub n_ref_kmers: fnv::FnvHashMap<String, usize>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -23,15 +24,15 @@ pub struct BigsyMapMini {
     pub num_hash: usize,
     pub k_size: usize,
     pub m_size: usize,
-    pub colors: HashMap<usize, String>,
-    pub map: HashMap<usize, Vec<u8>>,
-    pub n_ref_kmers: HashMap<String, usize>,
+    pub colors: fnv::FnvHashMap<usize, String>,
+    pub map: fnv::FnvHashMap<usize, Vec<u8>>,
+    pub n_ref_kmers: fnv::FnvHashMap<String, usize>,
 }
 
 pub fn save_bigsi(
-    bigsi_map: std::collections::HashMap<usize, Vec<u8>>,
-    colors_accession: std::collections::HashMap<usize, String>,
-    n_ref_kmers_in: std::collections::HashMap<String, usize>,
+    bigsi_map: fnv::FnvHashMap<usize, Vec<u8>>,
+    colors_accession: fnv::FnvHashMap<usize, String>,
+    n_ref_kmers_in: fnv::FnvHashMap<String, usize>,
     bloom_size_in: usize,
     num_hash_in: usize,
     k_size_in: usize,
@@ -55,9 +56,9 @@ pub fn save_bigsi(
 pub fn read_bigsi(
     path: &str,
 ) -> (
-    std::collections::HashMap<usize, Vec<u8>>,
-    std::collections::HashMap<usize, String>,
-    std::collections::HashMap<String, usize>,
+    fnv::FnvHashMap<usize, Vec<u8>>,
+    fnv::FnvHashMap<usize, String>,
+    fnv::FnvHashMap<String, usize>,
     usize,
     usize,
     usize,
@@ -66,7 +67,8 @@ pub fn read_bigsi(
     //let mut buffer = Vec::new();
     //reader.read_to_end(&mut buffer).expect("Can't read content");
     //let deserialized: BigsyMap = deserialize(&buffer[..]).expect("cant deserialize");
-    let deserialized: BigsyMap = deserialize_from(&mut reader, Infinite).expect("cant deserialize");
+    let deserialized: BigsyMap =
+        deserialize_from(&mut reader, Infinite).expect("can't deserialize");
     (
         deserialized.map,
         deserialized.colors,
@@ -78,9 +80,9 @@ pub fn read_bigsi(
 }
 
 pub fn save_bigsi_mini(
-    bigsi_map: std::collections::HashMap<usize, Vec<u8>>,
-    colors_accession: std::collections::HashMap<usize, String>,
-    n_ref_kmers_in: std::collections::HashMap<String, usize>,
+    bigsi_map: fnv::FnvHashMap<usize, Vec<u8>>,
+    colors_accession: fnv::FnvHashMap<usize, String>,
+    n_ref_kmers_in: fnv::FnvHashMap<String, usize>,
     bloom_size_in: usize,
     num_hash_in: usize,
     k_size_in: usize,
@@ -106,9 +108,9 @@ pub fn save_bigsi_mini(
 pub fn read_bigsi_mini(
     path: &str,
 ) -> (
-    std::collections::HashMap<usize, Vec<u8>>,
-    std::collections::HashMap<usize, String>,
-    std::collections::HashMap<String, usize>,
+    fnv::FnvHashMap<usize, Vec<u8>>,
+    fnv::FnvHashMap<usize, String>,
+    fnv::FnvHashMap<String, usize>,
     usize,
     usize,
     usize,
@@ -118,7 +120,8 @@ pub fn read_bigsi_mini(
     //let mut buffer = Vec::new();
     //reader.read_to_end(&mut buffer).expect("Can't read content");
     //let deserialized: BigsyMapMini = deserialize(&buffer[..]).expect("cant deserialize");
-    let deserialized: BigsyMapMini = deserialize_from(&mut reader, Infinite).expect("cant deserialize");
+    let deserialized: BigsyMapMini =
+        deserialize_from(&mut reader, Infinite).expect("cant deserialize");
     (
         deserialized.map,
         deserialized.colors,

@@ -1,11 +1,15 @@
 use std;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io;
+use std::io::prelude::*;
+use fnv;
 
 pub fn generate_report(
     query: &str,
     report: std::collections::HashMap<String, usize>,
     uniq_freqs: &std::collections::HashMap<String, Vec<f64>>,
-    n_ref_kmers: &std::collections::HashMap<String, usize>,
+    n_ref_kmers: &fnv::FnvHashMap<String, usize>,
     num_kmers: usize,
     cov: f64,
 ) {
@@ -70,4 +74,23 @@ pub fn mode(numbers: &[f64]) -> usize {
         .max_by_key(|&(_, count)| count)
         .map(|(val, _)| val)
         .expect("Cannot compute the mode of zero numbers")
+}
+
+pub fn read_counts(file_name: String, prefix: &str) {
+    let f = File::open(file_name).expect("file not found");
+    let iter1 = io::BufReader::new(f).lines();
+    let mut count_map = fnv::FnvHashMap::default();
+    for line in iter1 {
+        let l = line.unwrap().to_string();
+        let v: Vec<&str> = l.split('\t').collect();
+        let count = count_map.entry(v[1].to_owned()).or_insert(0);
+        *count += 1;
+    }
+    let mut count_file =
+        File::create(format!("{}_counts.txt", prefix)).expect("could not create outfile!");
+    for (key, value) in &count_map {
+        count_file
+            .write_all(format!("{}\t {}\n", key, value).as_bytes())
+            .expect("could not write count results!");
+    }
 }
