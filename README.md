@@ -1,11 +1,11 @@
-[![Build Status](https://travis-ci.org/hcdenbakker/bigs_id.svg?branch=master)](https://travis-ci.org/hcdenbakker/bigs_id)
+[![Build Status](https://travis-ci.org/hcdenbakker/colorid.svg?branch=master)](https://travis-ci.org/hcdenbakker/colorid)
 
 # colorid
 
 An experiment with writing code in Rust and the BIGSI data-structure (preprint: https://www.biorxiv.org/content/early/2017/12/18/234955) and Phelim Bradley's implementation (https://github.com/Phelimb/BIGSI).
 
 ## Download a precompiled binary
-Here: https://github.com/hcdenbakker/bigs_id/releases
+Here: https://github.com/hcdenbakker/colorid/releases
 
 ## or build it yourself with Rust!
 
@@ -13,16 +13,16 @@ Install Rust on your system (https://www.rust-lang.org/en-US/install.html)
 
 Clone this repository:
 
-```git clone https://github.com/hcdenbakker/bigs_id.git```
+```git clone https://github.com/hcdenbakker/colorid.git```
 
 Get into the bigs_id directory:
-```cd bigs_id```
+```cd colorid```
 
 And build your binary:
 
 ```cargo build --release```
 
-The binary can now be found in the `/target/release` directory within the `bigs_id` directory. Add the binary to your path for easy access.
+The binary can now be found in the `/target/release` directory within the `colorid` directory. Add the binary to your path for easy access.
 
 ## Usage
 ```
@@ -56,13 +56,13 @@ Infer k-mer similarity between a query fasta/fastq.gz file and an index of refer
 
 ### 1. Create index
 
-``` ./target/release/bigs_id build -r ref_file_example.txt -b test -k 31 -s 50000000 -n 4```
+``` ./target/release/colorid build -r ref_file_example.txt -b test -k 31 -s 50000000 -n 4```
 
 Note! These parameters work well for single isolate, mixed samples with a few species. For complex metagenomic samples the BIGSI parameters need to be adjusted to adjust the false positive rate.
 
 ### 2. Search
 
-``` ./target/release/bigs_id search -b test.bxi -q SRR4098796_1.fastq.gz -r SRR4098796_2.fastq.gz ```
+``` ./target/release/colorid search -b test.bxi -q SRR4098796_1.fastq.gz -r SRR4098796_2.fastq.gz ```
 
 ### 3. results
 With the default settings `bigs_id` will report reference sequences that share >35% of their k-mers with the query (more about this threshold to follow later). Here is the output of a search with SRA accession SRR4098796 (L. monocytogenes lineage I) as query:
@@ -85,16 +85,16 @@ First we need to make a 'reference file' for the files we want to query. I like 
 
 Next we create an index of the unassembled genome data. Given the fact our query size will be relatively small, we can use much stringent parameters for the index:
 
-``` ./target/release/bigs_id build -r example.txt -b 30M_2H_K21.bxi -k 21 -s 30000000 -n 2```
+``` ./target/release/colorid build -r example.txt -b 30M_2H_K21.bxi -k 21 -s 30000000 -n 2```
 
 This will perform a single threaded build of the index. If you want to speed up the build, you can use the `-t` flag to run it in multithreaded mode: 
 
-``` ./target/release/bigs_id build -r example.txt -b 30M_2H_K21.bxi -k 21 -s 30000000 -n 2 -t 24```
+``` ./target/release/colorid build -r example.txt -b 30M_2H_K21.bxi -k 21 -s 30000000 -n 2 -t 24```
 This command will perform a build in 24 threads.
 
 Now it is time for the search!
 
-``` ./target/release/bigs_id search -b 30M_2H_K21.bxi -q geneX.fasta -g ```
+``` ./target/release/colorid search -b 30M_2H_K21.bxi -q geneX.fasta -g ```
 
 When we use this subcommand we get results presented as follows:
 ```
