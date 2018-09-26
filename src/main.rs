@@ -645,7 +645,6 @@ fn main() {
                     )
                 };
             } else {
-                //let tax_map = bigs_id::read_id_mt_pe_ex::stream_fasta(
                 colorid::read_id_mt_pe::stream_fasta(
                     fq,
                     &bigsi_map,

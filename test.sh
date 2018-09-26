@@ -2,7 +2,7 @@
 echo "Building the database"
 ./target/debug/colorid build -s 750000 -n 4 -k 27 -b ./test_data/phage -r ./test_data/ref_file.txt
 if [ $? -gt 0 ]; then
-  echo "ERROR building bigs_id database ./test_data/phage.bxi using ./test_data/ref_file.txt";
+  echo "ERROR building colorid database ./test_data/phage.bxi using ./test_data/ref_file.txt";
   exit 1
 fi
 
@@ -10,7 +10,7 @@ fi
 echo "Building the database"
 ./target/debug/colorid build -s 750000 -n 4 -k 27 -b ./test_data/phage -r ./test_data/ref_file.txt -t 2
 if [ $? -gt 0 ]; then
-  echo "ERROR building bigs_id database ./test_data/phage.bxi using ./test_data/ref_file.txt";
+  echo "ERROR building colorid database ./test_data/phage.bxi using ./test_data/ref_file.txt";
   exit 1
 fi
 
