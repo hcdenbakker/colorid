@@ -2,11 +2,10 @@ extern crate colorid;
 #[macro_use]
 extern crate clap;
 
+use clap::{App, AppSettings, Arg, SubCommand};
 use colorid::bigsi;
 use colorid::build;
-use colorid::build_ex;
 use colorid::read_id_mt_pe::false_prob;
-use clap::{App, AppSettings, Arg, SubCommand};
 use std::alloc::System;
 use std::time::SystemTime;
 
@@ -15,7 +14,7 @@ static GLOBAL: System = System;
 
 fn main() {
     let matches = App::new("colorid")
-        .version("0.1.0")
+        .version("0.1.1")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .setting(AppSettings::ArgRequiredElseHelp)
@@ -96,7 +95,15 @@ fn main() {
                         .short("t")
                         .takes_value(true)
                         .long("threads"),
-                ),
+                )
+                .arg(
+                    Arg::with_name("quality")
+                        .help("minimum phred score to keep basepairs within read (default 15)")
+                        .required(false)
+                        .short("Q")
+                        .takes_value(true)
+                        .long("quality"),
+                        ),
         )
         .subcommand(
             SubCommand::with_name("search")
@@ -112,7 +119,7 @@ fn main() {
                         .required(true)
                         .takes_value(true),
                 )
-                .help(
+                /*.help(
                               "                              -b, --bigsi=[FILE] 'Sets the name of the index file for search'
                               -q, --query      'one or more fastq.gz or fasta formatted files to be queried'
                               -r, --reverse    'one or more fastq.gz (not fasta!) formatted files, supposed to be reverse reads of a paired end run'  
@@ -120,7 +127,7 @@ fn main() {
                               -p, --p_shared        'minimum proportion of kmers shared with reference'
                               -g, If set('-g'), the proportion of kmers from the query matching the entries in the index will be reported'
                               -s, If set('-s'), the 'speedy' 'perfect match' alforithm will be performed'
-                              -m, If set('-m'), each accession in a multifasta will betreated as a separate query, currently only with the -s option'")
+                              -m, If set('-m'), each accession in a multifasta will betreated as a separate query, currently only with the -s option'")*/
                 .arg(
                     Arg::with_name("query")
                         .help("query file(-s)fastq.gz")
@@ -179,19 +186,16 @@ fn main() {
                         .short("m")
                         .takes_value(false)
                         .long("multi_fasta"),
+                )
+                .arg(
+                    Arg::with_name("quality")
+                        .help("minimum phred score to keep basepairs within read (default 15)")
+                        .required(false)
+                        .short("Q")
+                        .takes_value(true)
+                        .long("quality"),
                 ),
         )
-        /*.subcommand(
-            SubCommand::with_name("test")
-                .about("controls testing features")
-                .version("0.1")
-                .author("Someone E. <someone_else@other.com>")
-                .arg(
-                    Arg::with_name("debug")
-                        .short("d")
-                        .help("print debug information verbosely"),
-                ),
-        )*/
         .subcommand(
             SubCommand::with_name("info")
                 .about("dumps index parameters and accessions")
@@ -227,7 +231,7 @@ fn main() {
                         .long("bigsi")
                         .required(true)
                         .takes_value(true)
-                        .help("index for which info is requested"),
+                        .help("index to be used for search"),
                         )
                 .arg(
                     Arg::with_name("query")
@@ -277,7 +281,15 @@ fn main() {
                         .short("p")
                         .takes_value(true)
                         .long("fp_correct"),
-                ),
+                )
+                .arg(
+                    Arg::with_name("quality")
+                        .help("minimum phred score to keep basepairs within read (default 15)")
+                        .required(false)
+                        .short("Q")
+                        .takes_value(true)
+                        .long("quality"),
+                        ),
         )
         .subcommand(
             SubCommand::with_name("read_filter")
@@ -341,18 +353,30 @@ fn main() {
         let bloom = value_t!(matches, "length_bloom", usize).unwrap_or(50_000_000);
         let hashes = value_t!(matches, "num_hashes", usize).unwrap_or(4);
         let threads = value_t!(matches, "threads", usize).unwrap_or(1);
+        let quality = value_t!(matches, "quality", u8).unwrap_or(15);
         let minimizer = matches.is_present("minimizer");
         //hack to work around current clap bug with default values only being &str
         let minimizer_value: usize = matches.value_of("value").unwrap().parse::<usize>().unwrap();
-        let map = build_ex::tab_to_map(matches.value_of("ref_file").unwrap().to_string());
+        let map = build::tab_to_map(matches.value_of("ref_file").unwrap().to_string());
         if minimizer {
             println!("Build with minimizers, minimizer size: {}", minimizer_value);
             let (bigsi_map, colors_accession, n_ref_kmers) = if threads == 1 {
-                build_ex::build_single_mini(&map, bloom, hashes, kmer, minimizer_value)
+                build::build_single_mini(&map, bloom, hashes, kmer, minimizer_value)
             } else {
-                build_ex::build_multi_mini(&map, bloom, hashes, kmer, minimizer_value, threads)
+                build::build_multi_mini(&map, bloom, hashes, kmer, minimizer_value, threads)
             };
             println!("Saving BIGSI to file.");
+            let index = bigsi::BigsyMapMini{
+                map: bigsi_map,
+                colors: colors_accession,
+                n_ref_kmers: n_ref_kmers,
+                bloom_size: bloom,
+                num_hash: hashes,
+                k_size: kmer,
+                m_size: minimizer_value,
+            }; 
+            bigsi::save_bigsi_mini(&(matches.value_of("bigsi").unwrap().to_owned() + ".mxi"), &index);
+            /*
             bigsi::save_bigsi_mini(
                 bigsi_map.to_owned(),
                 colors_accession.to_owned(),
@@ -362,22 +386,25 @@ fn main() {
                 kmer,
                 minimizer_value,
                 &(matches.value_of("bigsi").unwrap().to_owned() + ".mxi"),
-            );
+            );*/
         } else {
             let (bigsi_map, colors_accession, n_ref_kmers) = if threads == 1 {
-                build_ex::build_single(&map, bloom, hashes, kmer)
+                build::build_single(&map, bloom, hashes, kmer)
             } else {
-                build_ex::build_multi(&map, bloom, hashes, kmer, threads)
+                build::build_multi(&map, bloom, hashes, kmer, threads)
+            };
+            let index = bigsi::BigsyMap{
+                map: bigsi_map,
+                colors: colors_accession,
+                n_ref_kmers: n_ref_kmers,
+                bloom_size: bloom,
+                num_hash: hashes,
+                k_size: kmer,
             };
             println!("Saving BIGSI to file.");
             bigsi::save_bigsi(
-                bigsi_map.to_owned(),
-                colors_accession.to_owned(),
-                n_ref_kmers.to_owned(),
-                bloom,
-                hashes,
-                kmer,
                 &(matches.value_of("bigsi").unwrap().to_owned() + ".bxi"),
+                &index
             );
         }
     }
@@ -394,6 +421,7 @@ fn main() {
         let gene_search = matches.is_present("gene_search");
         let perfect_search = matches.is_present("perfect_search");
         let multi_fasta = matches.is_present("multi_fasta");
+        let quality = value_t!(matches, "quality", u8).unwrap_or(15);
         if matches.value_of("bigsi").unwrap().ends_with(".mxi") {
             eprintln!(
                 "Error: An index with minimizers (.mxi) is used, but not available for this function"
@@ -401,7 +429,7 @@ fn main() {
         } else {
             let bigsi_time = SystemTime::now();
             eprintln!("Loading index");
-            let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
+            let index =
                 bigsi::read_bigsi(matches.value_of("bigsi").unwrap());
             match bigsi_time.elapsed() {
                 Ok(elapsed) => {
@@ -417,23 +445,23 @@ fn main() {
                     //make 'perfect' batch....
                     colorid::perfect_search::batch_search_mf(
                         files1,
-                        &bigsi_map,
-                        &colors_accession,
-                        &n_ref_kmers,
-                        bloom_size,
-                        num_hash,
-                        k_size,
+                        &index.map,
+                        &index.colors,
+                        &index.n_ref_kmers,
+                        index.bloom_size,
+                        index.num_hash,
+                        index.k_size,
                         cov,
                     )
                 } else {
                     colorid::perfect_search::batch_search(
                         files1,
-                        &bigsi_map,
-                        &colors_accession,
-                        &n_ref_kmers,
-                        bloom_size,
-                        num_hash,
-                        k_size,
+                        &index.map,
+                        &index.colors,
+                        &index.n_ref_kmers,
+                        index.bloom_size,
+                        index.num_hash,
+                        index.k_size,
                         cov,
                     )
                 }
@@ -441,12 +469,12 @@ fn main() {
                 colorid::batch_search_pe::batch_search(
                     files1,
                     files2,
-                    &bigsi_map,
-                    &colors_accession,
-                    &n_ref_kmers,
-                    bloom_size,
-                    num_hash,
-                    k_size,
+                    &index.map,
+                    &index.colors,
+                    &index.n_ref_kmers,
+                    index.bloom_size,
+                    index.num_hash,
+                    index.k_size,
                     filter,
                     cov,
                     gene_search,
@@ -460,8 +488,7 @@ fn main() {
         eprintln!("Loading index");
         let index = matches.value_of("bigsi").unwrap();
         if index.ends_with(".mxi") {
-            let (_bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size, m_size) =
-                bigsi::read_bigsi_mini(index);
+            let bigsi = bigsi::read_bigsi_mini(index);
             match bigsi_time.elapsed() {
                 Ok(elapsed) => {
                     eprintln!("Index loaded in {} seconds", elapsed.as_secs());
@@ -473,25 +500,25 @@ fn main() {
             }
             println!(
             "BIGSI parameters:\nBloomfilter-size: {}\nNumber of hashes: {}\nK-mer size: {}\n minimizer size: {}\n",
-            bloom_size, num_hash, k_size, m_size
+            bigsi.bloom_size, bigsi.num_hash, bigsi.k_size, bigsi.m_size
         );
-            println!("Number of accessions in index: {}", colors_accession.len());
+            println!("Number of accessions in index: {}", bigsi.colors.len());
             let mut accessions = Vec::new();
-            for (_k, v) in colors_accession {
+            for (_k, v) in bigsi.colors {
                 accessions.push(v);
             }
             accessions.sort_by(|a, b| a.cmp(b));
             for a in accessions {
-                let k_size = n_ref_kmers.get(&a).unwrap();
+                let k_size = bigsi.n_ref_kmers.get(&a).unwrap();
                 println!(
                     "{} {} {:.3}",
                     a,
                     k_size,
-                    false_prob(bloom_size as f64, num_hash as f64, *k_size as f64)
+                    false_prob(bigsi.bloom_size as f64, bigsi.num_hash as f64, *k_size as f64)
                 );
             }
         } else {
-            let (_bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
+            let bigsi =
                 bigsi::read_bigsi(index);
             match bigsi_time.elapsed() {
                 Ok(elapsed) => {
@@ -504,21 +531,21 @@ fn main() {
             }
             println!(
                 "BIGSI parameters:\nBloomfilter-size: {}\nNumber of hashes: {}\nK-mer size: {}",
-                bloom_size, num_hash, k_size
+                bigsi.bloom_size, bigsi.num_hash, bigsi.k_size
             );
-            println!("Number of accessions in index: {}", colors_accession.len());
+            println!("Number of accessions in index: {}", bigsi.colors.len());
             let mut accessions = Vec::new();
-            for (_k, v) in colors_accession {
+            for (_k, v) in bigsi.colors {
                 accessions.push(v);
             }
             accessions.sort_by(|a, b| a.cmp(b));
             for a in accessions {
-                let k_size = n_ref_kmers.get(&a).unwrap();
+                let k_size = bigsi.n_ref_kmers.get(&a).unwrap();
                 println!(
                     "{} {} {:.3}",
                     a,
                     k_size,
-                    false_prob(bloom_size as f64, num_hash as f64, *k_size as f64)
+                    false_prob(bigsi.bloom_size as f64, bigsi.num_hash as f64, *k_size as f64)
                 );
             }
         }
@@ -533,10 +560,11 @@ fn main() {
         let fp_correct = 10f64.powf(-correct);
         let index = matches.value_of("bigsi").unwrap();
         let prefix = matches.value_of("prefix").unwrap();
+        let quality = value_t!(matches, "quality", u8).unwrap_or(15);
         let batch = value_t!(matches, "batch", usize).unwrap_or(50000);
         eprintln!("Loading index");
         if index.ends_with(".mxi") {
-            let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size, m_size) =
+            let bigsi =
                 bigsi::read_bigsi_mini(matches.value_of("bigsi").unwrap());
             match bigsi_time.elapsed() {
                 Ok(elapsed) => {
@@ -551,46 +579,48 @@ fn main() {
                 if fq.len() > 1 {
                     colorid::read_id_mt_pe::per_read_stream_pe(
                         fq,
-                        &bigsi_map,
-                        &colors_accession,
-                        &n_ref_kmers,
-                        bloom_size,
-                        num_hash,
-                        k_size,
-                        m_size,
+                        &bigsi.map,
+                        &bigsi.colors,
+                        &bigsi.n_ref_kmers,
+                        bigsi.bloom_size,
+                        bigsi.num_hash,
+                        bigsi.k_size,
+                        bigsi.m_size,
                         threads,
                         down_sample,
                         fp_correct,
                         batch,
                         prefix,
+                        quality,
                     )
                 } else {
                     colorid::read_id_mt_pe::per_read_stream_se(
                         fq,
-                        &bigsi_map,
-                        &colors_accession,
-                        &n_ref_kmers,
-                        bloom_size,
-                        num_hash,
-                        k_size,
-                        m_size,
+                        &bigsi.map,
+                        &bigsi.colors,
+                        &bigsi.n_ref_kmers,
+                        bigsi.bloom_size,
+                        bigsi.num_hash,
+                        bigsi.k_size,
+                        bigsi.m_size,
                         threads,
                         down_sample,
                         fp_correct,
                         batch,
                         prefix,
+                        quality,
                     )
                 };
             } else {
                 colorid::read_id_mt_pe::stream_fasta(
                     fq,
-                    &bigsi_map,
-                    &colors_accession,
-                    &n_ref_kmers,
-                    bloom_size,
-                    num_hash,
-                    k_size,
-                    m_size,
+                    &bigsi.map,
+                    &bigsi.colors,
+                    &bigsi.n_ref_kmers,
+                    bigsi.bloom_size,
+                    bigsi.num_hash,
+                    bigsi.k_size,
+                    bigsi.m_size,
                     threads,
                     down_sample,
                     fp_correct,
@@ -599,7 +629,7 @@ fn main() {
                 );
             }
         } else {
-            let (bigsi_map, colors_accession, n_ref_kmers, bloom_size, num_hash, k_size) =
+            let bigsi =
                 bigsi::read_bigsi(matches.value_of("bigsi").unwrap());
             match bigsi_time.elapsed() {
                 Ok(elapsed) => {
@@ -614,45 +644,47 @@ fn main() {
                 if fq.len() > 1 {
                     colorid::read_id_mt_pe::per_read_stream_pe(
                         fq,
-                        &bigsi_map,
-                        &colors_accession,
-                        &n_ref_kmers,
-                        bloom_size,
-                        num_hash,
-                        k_size,
+                        &bigsi.map,
+                        &bigsi.colors,
+                        &bigsi.n_ref_kmers,
+                        bigsi.bloom_size,
+                        bigsi.num_hash,
+                        bigsi.k_size,
                         0,
                         threads,
                         down_sample,
                         fp_correct,
                         batch,
                         prefix,
+                        quality,
                     )
                 } else {
                     colorid::read_id_mt_pe::per_read_stream_se(
                         fq,
-                        &bigsi_map,
-                        &colors_accession,
-                        &n_ref_kmers,
-                        bloom_size,
-                        num_hash,
-                        k_size,
+                        &bigsi.map,
+                        &bigsi.colors,
+                        &bigsi.n_ref_kmers,
+                        bigsi.bloom_size,
+                        bigsi.num_hash,
+                        bigsi.k_size,
                         0,
                         threads,
                         down_sample,
                         fp_correct,
                         batch,
                         prefix,
+                        quality,
                     )
                 };
             } else {
                 colorid::read_id_mt_pe::stream_fasta(
                     fq,
-                    &bigsi_map,
-                    &colors_accession,
-                    &n_ref_kmers,
-                    bloom_size,
-                    num_hash,
-                    k_size,
+                    &bigsi.map,
+                    &bigsi.colors,
+                    &bigsi.n_ref_kmers,
+                    bigsi.bloom_size,
+                    bigsi.num_hash,
+                    bigsi.k_size,
                     0,
                     threads,
                     down_sample,

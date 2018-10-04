@@ -1,6 +1,7 @@
 use flate2::read::MultiGzDecoder;
-use std;
 use fnv;
+use seq;
+use std;
 use std::cmp;
 use std::collections::HashMap;
 use std::fs::File;
@@ -94,19 +95,21 @@ pub fn kmerize_vector(
         let l_r = revcomp(&l);
         for i in 0..l.len() - k + 1 {
             if i % d == 0 {
-                if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-                    let count = map
-                        .entry(l[i..i + k].to_string().to_uppercase())
-                        .or_insert(0);
-                    *count += 1;
-                } else {
-                    let count = map
-                        .entry(
-                            l_r[length_l - (i + k)..length_l - i]
-                                .to_string()
-                                .to_uppercase(),
-                        ).or_insert(0);
-                    *count += 1;
+                if seq::has_no_n(l[i..i + k].as_bytes()) {
+                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                        let count = map
+                            .entry(l[i..i + k].to_string().to_uppercase())
+                            .or_insert(0);
+                        *count += 1;
+                    } else {
+                        let count = map
+                            .entry(
+                                l_r[length_l - (i + k)..length_l - i]
+                                    .to_string()
+                                    .to_uppercase(),
+                            ).or_insert(0);
+                        *count += 1;
+                    }
                 }
             }
         }
@@ -140,10 +143,37 @@ pub fn kmerize_vector_uppercase(
     map
 }
 
-pub fn kmerize_string(
-    l: String,
+pub fn kmerize_vector_skip_n(
+    v: Vec<String>,
     k: usize,
+    d: usize,
 ) -> fnv::FnvHashMap<std::string::String, usize> {
+    let mut map = fnv::FnvHashMap::default();
+    for l in v {
+        let length_l = l.len();
+        let l_r = revcomp(&l);
+        for i in 0..l.len() - k + 1 {
+            if i % d == 0 {
+                if seq::has_no_n(l[i..i + k].as_bytes()) {
+                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                        let count = map.entry(l[i..i + k].to_string()).or_insert(0);
+                        *count += 1;
+                    } else {
+                        let count = map
+                            .entry(l_r[length_l - (i + k)..length_l - i].to_string())
+                            .or_insert(0);
+                        *count += 1;
+                    }
+                } else {
+                    continue;
+                }
+            }
+        }
+    }
+    map
+}
+
+pub fn kmerize_string(l: String, k: usize) -> fnv::FnvHashMap<std::string::String, usize> {
     let mut map = fnv::FnvHashMap::default();
     let length_l = l.len();
     let l_r = revcomp(&l);
@@ -193,10 +223,38 @@ pub fn minimerize_vector(
     map
 }
 
-pub fn kmers_from_fq(
-    filename: String,
+pub fn minimerize_vector_skip_n(
+    v: Vec<String>,
     k: usize,
+    m: usize,
+    d: usize,
 ) -> fnv::FnvHashMap<std::string::String, usize> {
+    let mut map = fnv::FnvHashMap::default();
+    for l in v {
+        let length_l = l.len();
+        let l_r = revcomp(&l);
+        for i in 0..l.len() - k + 1 {
+            if i % d == 0 {
+                if seq::has_no_n(l[i..i + k].as_bytes()) {
+                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                        let min = find_minimizer(&l[i..i + k], m);
+                        let count = map.entry(min).or_insert(0);
+                        *count += 1;
+                    } else {
+                        let min = find_minimizer(&l_r[length_l - (i + k)..length_l - i], m);
+                        let count = map.entry(min).or_insert(0);
+                        *count += 1;
+                    }
+                } else {
+                    continue;
+                }
+            }
+        }
+    }
+    map
+}
+
+pub fn kmers_from_fq(filename: String, k: usize) -> fnv::FnvHashMap<std::string::String, usize> {
     let f = File::open(filename).expect("file not found");
     let mut map = fnv::FnvHashMap::default();
     let mut line_count = 1;
@@ -264,10 +322,7 @@ pub fn kmers_from_fq_minimizer(
     map
 }
 
-pub fn kmers_fq_pe(
-    filenames: Vec<&str>,
-    k: usize,
-) -> fnv::FnvHashMap<std::string::String, usize> {
+pub fn kmers_fq_pe(filenames: Vec<&str>, k: usize) -> fnv::FnvHashMap<std::string::String, usize> {
     let mut map = fnv::FnvHashMap::default();
     for filename in filenames {
         let mut f = File::open(filename).expect("file not found");
@@ -296,6 +351,75 @@ pub fn kmers_fq_pe(
             }
             line_count += 1;
         }
+    }
+    map
+}
+
+pub fn kmers_fq_pe_qual(
+    filenames: Vec<&str>,
+    k: usize,
+    d: usize,
+    qual_offset: u8,
+) -> fnv::FnvHashMap<std::string::String, usize> {
+    let mut line_count = 1;
+    let f = File::open(&filenames[0]).expect("file not found");
+    let f2 = File::open(&filenames[1]).expect("file not found");
+    let d1 = MultiGzDecoder::new(f);
+    let d2 = MultiGzDecoder::new(f2);
+    let iter1 = io::BufReader::new(d1).lines();
+    let mut iter2 = io::BufReader::new(d2).lines();
+    let mut map = fnv::FnvHashMap::default();
+    let mut fastq = seq::Fastq::new();
+    for line in iter1 {
+        let l = line.unwrap();
+        let line2 = iter2.next();
+        if line_count % 4 == 1 {
+            match line2 {
+                Some(h2) => {
+                    fastq.id = l.to_string();
+                }
+                None => break,
+            };
+        } else if line_count % 4 == 2 {
+            match line2 {
+                Some(l2) => {
+                    fastq.seq1 = l.to_owned();
+                    fastq.seq2 = l2.unwrap().to_owned();
+                }
+                None => break,
+            };
+        } else if line_count % 4 == 0 {
+            match line2 {
+                Some(l2) => {
+                    fastq.qual1 = l.to_owned();
+                    fastq.qual2 = l2.unwrap().to_owned();
+                    let masked1 = seq::qual_mask(fastq.seq1.to_owned(), fastq.qual1, qual_offset);
+                    let masked2 = seq::qual_mask(fastq.seq2.to_owned(), fastq.qual2, qual_offset);
+                    for l in vec![masked1, masked2] {
+                        let length_l = l.len();
+                        let l_r = revcomp(&l);
+                        for i in 0..l.len() - k + 1 {
+                            if i % d == 0 {
+                                if seq::has_no_n(l[i..i + k].as_bytes()) {
+                                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                                        let count = map.entry(l[i..i + k].to_string()).or_insert(0);
+                                        *count += 1;
+                                    } else {
+                                        let count = map
+                                            .entry(
+                                                l_r[length_l - (i + k)..length_l - i].to_string(),
+                                            ).or_insert(0);
+                                        *count += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                None => break,
+            };
+        }
+        line_count += 1;
     }
     map
 }

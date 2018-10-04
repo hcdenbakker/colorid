@@ -1,13 +1,14 @@
 use bit_vec::BitVec;
+use fasthash;
 use flate2::read::MultiGzDecoder;
+use fnv;
 use kmer;
 use kmer::minimerize_vector;
 use murmurhash64::murmur_hash64a;
-use fasthash;
-use fnv;
 use probability::prelude::*;
 use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
+use seq;
 use std;
 use std::collections::HashMap;
 use std::fs::File;
@@ -15,7 +16,6 @@ use std::io;
 use std::io::prelude::*;
 use std::sync::Arc;
 use std::time::SystemTime;
-
 
 pub fn false_prob_map(
     colors_accession: &fnv::FnvHashMap<usize, String>,
@@ -51,7 +51,8 @@ pub fn search_index(
     for k in map.keys() {
         let mut kmer_slices = Vec::new();
         for i in 0..num_hash {
-            let bit_index = fasthash::xx::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
+            let bit_index =
+                fasthash::xx::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
             let bi = bit_index as usize;
             if !bigsi_map.contains_key(&bi) || bigsi_map[&bi] == empty_bitvec {
                 break;
@@ -69,11 +70,11 @@ pub fn search_index(
                 first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
             }
             let mut color = 0;
-            for item in first{
-                if item{
+            for item in first {
+                if item {
                     *report.entry(color).or_insert(0) += 1;
                 }
-                color +=1;
+                color += 1;
             }
         }
     }
@@ -266,8 +267,7 @@ pub fn stream_fasta(
         .unwrap();
     let false_positive_p = false_prob_map(colors_accession, ref_kmers_in, bloom_size, num_hash);
     let my_bigsi: Arc<&fnv::FnvHashMap<usize, Vec<u8>>> = Arc::new(bigsi_map);
-    let false_positive_p_arc: Arc<fnv::FnvHashMap<usize, f64>> =
-        Arc::new(false_positive_p);
+    let false_positive_p_arc: Arc<fnv::FnvHashMap<usize, f64>> = Arc::new(false_positive_p);
     let search_time = SystemTime::now();
     let mut count = 0;
     let mut read_count = 0;
@@ -299,14 +299,14 @@ pub fn stream_fasta(
                         (r[0].to_owned(), "too_short")
                     } else {
                         let map = if m == 0 {
-                            kmer::kmerize_vector(vec![r[1].to_string()], k, d)
+                            kmer::kmerize_vector_skip_n(vec![r[1].to_string()], k, d)
                         } else {
-                            kmer::minimerize_vector(vec![r[1].to_string()], k, m, d)
+                            kmer::minimerize_vector_skip_n(vec![r[1].to_string()], k, m, d)
                         };
                         let report =
                             search_index(&child_bigsi, &map, bloom_size, num_hash, no_hits_num);
                         if report.is_empty() {
-                            (r[0].to_owned(), "no_hits, report empty")
+                            (r[0].to_owned(), "no_hits")
                         } else {
                             if m == 0 {
                                 (
@@ -357,13 +357,13 @@ pub fn stream_fasta(
                 (r[0].to_owned(), "too_short")
             } else {
                 let map = if m == 0 {
-                    kmer::kmerize_vector(vec![r[1].to_string()], k, d)
+                    kmer::kmerize_vector_skip_n(vec![r[1].to_string()], k, d)
                 } else {
-                    kmer::minimerize_vector(vec![r[1].to_string()], k, m, d)
+                    kmer::minimerize_vector_skip_n(vec![r[1].to_string()], k, m, d)
                 };
                 let report = search_index(&child_bigsi, &map, bloom_size, num_hash, no_hits_num);
                 if report.is_empty() {
-                    (r[0].to_owned(), "no hits, report empty")
+                    (r[0].to_owned(), "no hits")
                 } else {
                     if m == 0 {
                         (
@@ -449,6 +449,7 @@ pub fn per_read_stream_pe(
     fp_correct: f64,
     b: usize,
     prefix: &str,
+    qual_offset: u8,
 ) /*-> std::collections::HashMap<std::string::String, usize>*/
 {
     let search_time = SystemTime::now();
@@ -470,22 +471,31 @@ pub fn per_read_stream_pe(
         .unwrap();
     let false_positive_p = false_prob_map(colors_accession, ref_kmers_in, bloom_size, num_hash);
     let my_bigsi: Arc<&fnv::FnvHashMap<usize, Vec<u8>>> = Arc::new(bigsi_map);
-    let false_positive_p_arc: Arc<fnv::FnvHashMap<usize, f64>> =
-        Arc::new(false_positive_p);
+    let false_positive_p_arc: Arc<fnv::FnvHashMap<usize, f64>> = Arc::new(false_positive_p);
     let mut read_count = 0;
     let mut header = "".to_string();
+    let mut fastq = seq::Fastq::new();
     for line in iter1 {
         let l = line.unwrap();
         let line2 = iter2.next();
         if line_count % 4 == 1 {
-            header = l.to_string();
+            fastq.id = l.to_string();
         } else if line_count % 4 == 2 {
             match line2 {
                 Some(l2) => {
+                    fastq.seq1 = l.to_owned();
+                    fastq.seq2 = l2.unwrap().to_owned();
+                }
+                None => break,
+            };
+        } else if line_count % 4 == 0 {
+            match line2 {
+                Some(l2) => {
                     vec.push(vec![
-                        header.to_owned(),
-                        l.to_owned(),
-                        l2.unwrap().to_owned(),
+                        fastq.id.to_owned(),
+                        seq::qual_mask(fastq.seq1.to_owned(), l.to_owned(), qual_offset).to_owned(),
+                        seq::qual_mask(fastq.seq2.to_owned(), l2.unwrap().to_owned(), qual_offset)
+                            .to_owned(),
                     ]);
                 }
                 None => break,
@@ -503,7 +513,11 @@ pub fn per_read_stream_pe(
                         (r[0].to_owned(), "too_short")
                     } else {
                         let map = if m == 0 {
-                            kmer::kmerize_vector(vec![r[1].to_string(), r[2].to_string()], k, d)
+                            kmer::kmerize_vector_skip_n(
+                                vec![r[1].to_string(), r[2].to_string()],
+                                k,
+                                d,
+                            )
                         } else {
                             kmer::minimerize_vector(
                                 vec![r[1].to_string(), r[2].to_string()],
@@ -515,7 +529,7 @@ pub fn per_read_stream_pe(
                         let report =
                             search_index(&child_bigsi, &map, bloom_size, num_hash, no_hits_num);
                         if report.is_empty() {
-                            (r[0].to_owned(), "no_hits, report empty")
+                            (r[0].to_owned(), "no_hits")
                         } else {
                             if m == 0 {
                                 (
@@ -565,13 +579,18 @@ pub fn per_read_stream_pe(
                 (r[0].to_owned(), "too_short")
             } else {
                 let map = if m == 0 {
-                    kmer::kmerize_vector(vec![r[1].to_string(), r[2].to_string()], k, d)
+                    kmer::kmerize_vector_skip_n(vec![r[1].to_string(), r[2].to_string()], k, d)
                 } else {
-                    kmer::minimerize_vector(vec![r[1].to_string(), r[2].to_string()], k, m, d)
+                    kmer::minimerize_vector_skip_n(
+                        vec![r[1].to_string(), r[2].to_string()],
+                        k,
+                        m,
+                        d,
+                    )
                 };
                 let report = search_index(&child_bigsi, &map, bloom_size, num_hash, no_hits_num);
                 if report.is_empty() {
-                    (r[0].to_owned(), "no_hits, report empty")
+                    (r[0].to_owned(), "no_hits")
                 } else {
                     if m == 0 {
                         (
@@ -636,12 +655,14 @@ pub fn per_read_stream_se(
     fp_correct: f64,
     b: usize,
     prefix: &str,
+    qual_offset: u8,
 ) /* -> std::collections::HashMap<std::string::String, usize>*/
 {
     let search_time = SystemTime::now();
     let mut vec = Vec::with_capacity(b);
     let mut line_count = 1;
     let mut header = "".to_string();
+    let mut sequence = "".to_string();
     let no_hits_num: usize = colors_accession.len();
     let mut read_count = 0;
     let mut file =
@@ -658,14 +679,20 @@ pub fn per_read_stream_se(
     let false_positive_p = false_prob_map(colors_accession, ref_kmers_in, bloom_size, num_hash);
 
     let my_bigsi: Arc<&fnv::FnvHashMap<usize, Vec<u8>>> = Arc::new(bigsi_map);
-    let false_positive_p_arc: Arc<fnv::FnvHashMap<usize, f64>> =
-        Arc::new(false_positive_p);
+    let false_positive_p_arc: Arc<fnv::FnvHashMap<usize, f64>> = Arc::new(false_positive_p);
+    let mut fastq = seq::Fastq::new();
     for line in iter1 {
         let l = line.unwrap();
         if line_count % 4 == 1 {
-            header = l.to_string();
+            fastq.id = l.to_string();
         } else if line_count % 4 == 2 {
-            vec.push(vec![header.to_owned(), l.to_owned()]);
+            fastq.seq1 = l.to_string();
+        } else if line_count % 4 == 0 {
+            vec.push(vec![
+                fastq.id.to_owned(),
+                fastq.seq1.to_owned(),
+                l.to_owned(),
+            ]);
         }
         line_count += 1;
         if line_count % batch == 0 {
@@ -679,14 +706,29 @@ pub fn per_read_stream_se(
                         (r[0].to_owned(), "too_short")
                     } else {
                         let map = if m == 0 {
-                            kmer::kmerize_vector(vec![r[1].to_string()], k, d)
+                            kmer::kmerize_vector(
+                                vec![
+                                    seq::qual_mask(r[1].to_string(), r[2].to_string(), qual_offset)
+                                        .to_owned(),
+                                ],
+                                k,
+                                d,
+                            )
                         } else {
-                            kmer::minimerize_vector(vec![r[1].to_string()], k, m, d)
+                            kmer::minimerize_vector(
+                                vec![
+                                    seq::qual_mask(r[1].to_string(), r[2].to_string(), qual_offset)
+                                        .to_owned(),
+                                ],
+                                k,
+                                m,
+                                d,
+                            )
                         };
                         let report =
                             search_index(&child_bigsi, &map, bloom_size, num_hash, no_hits_num);
                         if report.is_empty() {
-                            (r[0].to_owned(), "no_hits, report empty")
+                            (r[0].to_owned(), "no_hits")
                         } else {
                             if m == 0 {
                                 (
@@ -742,7 +784,7 @@ pub fn per_read_stream_se(
                 };
                 let report = search_index(&child_bigsi, &map, bloom_size, num_hash, no_hits_num);
                 if report.is_empty() {
-                    (r[0].to_owned(), "no_hitsi, report empty")
+                    (r[0].to_owned(), "no_hitsi")
                 } else {
                     if m == 0 {
                         (

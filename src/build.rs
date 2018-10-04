@@ -1,6 +1,8 @@
+extern crate bit_vec;
 extern crate rayon;
 
 use bit_vec::BitVec;
+use fnv;
 use kmer;
 use rayon::prelude::*;
 use simple_bloom;
@@ -9,9 +11,10 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
+use std::sync::Arc;
 
-pub fn tab_to_map(filename: String) -> std::collections::HashMap<std::string::String, Vec<String>> {
-    let mut map = HashMap::new();
+pub fn tab_to_map(filename: String) -> fnv::FnvHashMap<std::string::String, Vec<String>> {
+    let mut map = fnv::FnvHashMap::default();
     let f = File::open(filename).expect("reference file not found");
     for line in io::BufReader::new(f).lines() {
         let l = line.unwrap();
@@ -29,20 +32,20 @@ pub fn tab_to_map(filename: String) -> std::collections::HashMap<std::string::St
 }
 
 pub fn build_single(
-    map: &std::collections::HashMap<std::string::String, Vec<String>>,
+    map: &fnv::FnvHashMap<std::string::String, Vec<String>>,
     bloom_size: usize,
     num_hash: usize,
     k_size: usize,
 ) -> (
     //std::collections::HashMap<usize, bit_vec::BitVec>,
-    std::collections::HashMap<usize, Vec<u8>>,
-    std::collections::HashMap<usize, String>,
-    std::collections::HashMap<String, usize>,
+    fnv::FnvHashMap<usize, Vec<u8>>,
+    fnv::FnvHashMap<usize, String>,
+    fnv::FnvHashMap<String, usize>,
 ) {
     //get a hash map with taxa and bit vector from bloom filter
     let map_length = map.len();
     let mut bit_map = HashMap::with_capacity(map_length);
-    let mut ref_kmer = HashMap::with_capacity(map_length);
+    let mut ref_kmer = fnv::FnvHashMap::default();
     let mut accessions = Vec::with_capacity(map_length);
     let mut counter = 1;
     for (accession, v) in map {
@@ -86,14 +89,14 @@ pub fn build_single(
     accessions.sort();
     //create hash table with colors for accessions
     let num_taxa = accessions.len();
-    let mut accession_colors = HashMap::with_capacity(accessions.len());
-    let mut colors_accession = HashMap::with_capacity(accessions.len());
+    let mut accession_colors = fnv::FnvHashMap::default();
+    let mut colors_accession = fnv::FnvHashMap::default();
     for (c, s) in accessions.iter().enumerate() {
         accession_colors.insert(s.to_string(), c);
         colors_accession.insert(c, s.to_string());
     }
     //create actual index, the most straight forward way, but not very efficient
-    let mut bigsi_map = HashMap::new();
+    let mut bigsi_map = fnv::FnvHashMap::default();
     for i in 0..bloom_size {
         let mut bitvec = BitVec::from_elem(num_taxa, false);
         for (t, s) in &bit_map {
@@ -111,16 +114,16 @@ pub fn build_single(
 }
 
 pub fn build_multi(
-    map: &std::collections::HashMap<std::string::String, Vec<String>>,
+    map: &fnv::FnvHashMap<std::string::String, Vec<String>>,
     bloom_size: usize,
     num_hash: usize,
     k_size: usize,
     t: usize,
 ) -> (
     //std::collections::HashMap<usize, bit_vec::BitVec>,
-    std::collections::HashMap<usize, Vec<u8>>,
-    std::collections::HashMap<usize, String>,
-    std::collections::HashMap<String, usize>,
+    fnv::FnvHashMap<usize, Vec<u8>>,
+    fnv::FnvHashMap<usize, String>,
+    fnv::FnvHashMap<String, usize>,
 ) {
     //get a hash map with taxa and bit vector from bloom filter
     rayon::ThreadPoolBuilder::new()
@@ -129,7 +132,7 @@ pub fn build_multi(
         .unwrap();
     let map_length = map.len();
     let mut bit_map = HashMap::with_capacity(map_length);
-    let mut ref_kmer = HashMap::with_capacity(map_length);
+    let mut ref_kmer = fnv::FnvHashMap::default();
     let mut accessions = Vec::with_capacity(map_length);
     let mut map_vec = Vec::with_capacity(map_length);
     for (accession, v) in map {
@@ -144,7 +147,7 @@ pub fn build_multi(
         .par_iter()
         .map(|l| {
             if l.1.len() == 2 {
-                let unfiltered = kmer::kmers_fq_pe(vec![&l.1[0], &l.1[1]], k_size);
+                let unfiltered = kmer::kmers_fq_pe_qual(vec![&l.1[0], &l.1[1]], k_size, 1, 15);
                 let cutoff = kmer::auto_cutoff(unfiltered.to_owned());
                 let kmers = kmer::clean_map(unfiltered, cutoff);
                 let mut filter =
@@ -186,15 +189,38 @@ pub fn build_multi(
     accessions.sort();
     //create hash table with colors for accessions
     let num_taxa = accessions.len();
-    let mut accession_colors = HashMap::with_capacity(accessions.len());
-    let mut colors_accession = HashMap::with_capacity(accessions.len());
+    let mut accession_colors = fnv::FnvHashMap::default();
+    let mut colors_accession = fnv::FnvHashMap::default();
     for (c, s) in accessions.iter().enumerate() {
         accession_colors.insert(s.to_string(), c);
         colors_accession.insert(c, s.to_string());
     }
     eprintln!("Creation of index, this may take a while!");
     //create actual index, the most straight forward way, but not very efficient
-    let mut bigsi_map = HashMap::new();
+    //let my_bitmap: Arc<std::collections::HashMap<&std::string::String, bit_vec::BitVec>> = Arc::new(bit_map);
+    let mut bigsi_map = fnv::FnvHashMap::default();
+    let bloom_vec: Vec<usize> = (0..bloom_size).collect();
+    let d: Vec<_>;
+    d = bloom_vec
+        .par_iter()
+        .map(|i| {
+            //let child_bitmap = my_bitmap.clone();
+            let mut bitvec = BitVec::from_elem(num_taxa, false);
+            for (t, s) in &bit_map {
+                if s[*i] {
+                    bitvec.set(accession_colors[&t.to_string()], true);
+                }
+            }
+            (i, bitvec)
+        }).collect();
+    for t in d {
+        if t.1.none() {
+            continue;
+        } else {
+            bigsi_map.insert(t.0.to_owned(), t.1.to_bytes());
+        }
+    }
+    /*
     for i in 0..bloom_size {
         let mut bitvec = BitVec::from_elem(num_taxa, false);
         for (t, s) in &bit_map {
@@ -207,12 +233,12 @@ pub fn build_multi(
         } else {
             bigsi_map.insert(i, bitvec.to_bytes());
         }
-    }
+    }*/
     (bigsi_map, colors_accession, ref_kmer)
 }
 
 pub fn build_multi_mini(
-    map: &std::collections::HashMap<std::string::String, Vec<String>>,
+    map: &fnv::FnvHashMap<std::string::String, Vec<String>>,
     bloom_size: usize,
     num_hash: usize,
     k_size: usize,
@@ -220,9 +246,9 @@ pub fn build_multi_mini(
     t: usize,
 ) -> (
     //std::collections::HashMap<usize, bit_vec::BitVec>,
-    std::collections::HashMap<usize, Vec<u8>>,
-    std::collections::HashMap<usize, String>,
-    std::collections::HashMap<String, usize>,
+    fnv::FnvHashMap<usize, Vec<u8>>,
+    fnv::FnvHashMap<usize, String>,
+    fnv::FnvHashMap<String, usize>,
 ) {
     //get a hash map with taxa and bit vector from bloom filter
     rayon::ThreadPoolBuilder::new()
@@ -231,7 +257,7 @@ pub fn build_multi_mini(
         .unwrap();
     let map_length = map.len();
     let mut bit_map = HashMap::with_capacity(map_length);
-    let mut ref_kmer = HashMap::with_capacity(map_length);
+    let mut ref_kmer = fnv::FnvHashMap::default();
     let mut accessions = Vec::with_capacity(map_length);
     let mut map_vec = Vec::with_capacity(map_length);
     for (accession, v) in map {
@@ -288,16 +314,37 @@ pub fn build_multi_mini(
     accessions.sort();
     //create hash table with colors for accessions
     let num_taxa = accessions.len();
-    let mut accession_colors = HashMap::with_capacity(accessions.len());
-    let mut colors_accession = HashMap::with_capacity(accessions.len());
+    let mut accession_colors = fnv::FnvHashMap::default();
+    let mut colors_accession = fnv::FnvHashMap::default();
     for (c, s) in accessions.iter().enumerate() {
         accession_colors.insert(s.to_string(), c);
         colors_accession.insert(c, s.to_string());
     }
     eprintln!("Creation of index, this may take a while!");
     //create actual index, the most straight forward way, but not very efficient
-    let mut bigsi_map = HashMap::new();
+    let mut bigsi_map = fnv::FnvHashMap::default();
     //this can be done in parallel!
+    let bloom_vec: Vec<usize> = (0..bloom_size).collect();
+    let d: Vec<_>;
+    d = bloom_vec
+        .par_iter()
+        .map(|i| {
+            let mut bitvec = BitVec::from_elem(num_taxa, false);
+            for (t, s) in &bit_map {
+                if s[*i] {
+                    bitvec.set(accession_colors[&t.to_string()], true);
+                }
+            }
+            (i, bitvec)
+        }).collect();
+    for t in d {
+        if t.1.none() {
+            continue;
+        } else {
+            bigsi_map.insert(t.0.to_owned(), t.1.to_bytes());
+        }
+    }
+    /*
     for i in 0..bloom_size {
         let mut bitvec = BitVec::from_elem(num_taxa, false);
         for (t, s) in &bit_map {
@@ -310,26 +357,26 @@ pub fn build_multi_mini(
         } else {
             bigsi_map.insert(i, bitvec.to_bytes());
         }
-    }
+    }*/
     (bigsi_map, colors_accession, ref_kmer)
 }
 
 pub fn build_single_mini(
-    map: &std::collections::HashMap<std::string::String, Vec<String>>,
+    map: &fnv::FnvHashMap<std::string::String, Vec<String>>,
     bloom_size: usize,
     num_hash: usize,
     k_size: usize,
     m: usize,
 ) -> (
     //std::collections::HashMap<usize, bit_vec::BitVec>,
-    std::collections::HashMap<usize, Vec<u8>>,
-    std::collections::HashMap<usize, String>,
-    std::collections::HashMap<String, usize>,
+    fnv::FnvHashMap<usize, Vec<u8>>,
+    fnv::FnvHashMap<usize, String>,
+    fnv::FnvHashMap<String, usize>,
 ) {
     //get a hash map with taxa and bit vector from bloom filter
     let map_length = map.len();
     let mut bit_map = HashMap::with_capacity(map_length);
-    let mut ref_kmer = HashMap::with_capacity(map_length);
+    let mut ref_kmer = fnv::FnvHashMap::default();
     let mut accessions = Vec::with_capacity(map_length);
     let mut counter = 1;
     for (accession, v) in map {
@@ -373,14 +420,14 @@ pub fn build_single_mini(
     accessions.sort();
     //create hash table with colors for accessions
     let num_taxa = accessions.len();
-    let mut accession_colors = HashMap::with_capacity(accessions.len());
-    let mut colors_accession = HashMap::with_capacity(accessions.len());
+    let mut accession_colors = fnv::FnvHashMap::default();
+    let mut colors_accession = fnv::FnvHashMap::default();
     for (c, s) in accessions.iter().enumerate() {
         accession_colors.insert(s.to_string(), c);
         colors_accession.insert(c, s.to_string());
     }
     //create actual index, the most straight forward way, but not very efficient
-    let mut bigsi_map = HashMap::new();
+    let mut bigsi_map = fnv::FnvHashMap::default();
     for i in 0..bloom_size {
         let mut bitvec = BitVec::from_elem(num_taxa, false);
         for (t, s) in &bit_map {

@@ -1,7 +1,7 @@
 use bit_vec::BitVec;
-use kmer;
 use fasthash;
 use fnv;
+use kmer;
 use reports;
 use std;
 use std::collections::HashMap;
@@ -29,7 +29,7 @@ pub fn batch_search(
             } else {
                 eprintln!("Paired end: {} {}", file1, files2[i]);
                 eprintln!("Counting k-mers, this may take a while!");
-                kmer::kmers_fq_pe(vec![&file1, &files2[i]], k_size)
+                kmer::kmers_fq_pe_qual(vec![&file1, &files2[i]], k_size, 1, 15)
             };
             let kmers_query = if filter < 0 {
                 let cutoff = kmer::auto_cutoff(unfiltered.to_owned());
@@ -45,7 +45,8 @@ pub fn batch_search(
             for k in kmers_query.keys() {
                 let mut kmer_slices = Vec::new();
                 for i in 0..num_hash {
-                    let bit_index = fasthash::xx::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
+                    let bit_index =
+                        fasthash::xx::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
                     let bi = bit_index as usize;
                     if !bigsi_map.contains_key(&bi) {
                         break;
@@ -124,7 +125,8 @@ pub fn batch_search(
             for k in kmers_query.keys() {
                 let mut kmer_slices = Vec::new();
                 for i in 0..num_hash {
-                    let bit_index = fasthash::xx::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
+                    let bit_index =
+                        fasthash::xx::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
                     let bi = bit_index as usize;
                     if !bigsi_map.contains_key(&bi) {
                         break;

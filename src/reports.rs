@@ -1,9 +1,9 @@
+use fnv;
 use std;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use fnv;
 
 pub fn generate_report(
     query: &str,
