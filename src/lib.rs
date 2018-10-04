@@ -1,18 +1,16 @@
 extern crate bincode;
 extern crate bit_vec;
-extern crate flate2;
-extern crate murmurhash64;
 extern crate fasthash;
+extern crate flate2;
+extern crate fnv;
+extern crate murmurhash64;
 extern crate probability;
 extern crate rayon;
-extern crate fnv;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
 pub mod build;
-
-pub mod build_ex;
 
 pub mod bigsi;
 
@@ -29,3 +27,5 @@ pub mod simple_bloom;
 pub mod reports;
 
 pub mod read_filter;
+
+pub mod seq;
