@@ -478,6 +478,7 @@ fn main() {
                     filter,
                     cov,
                     gene_search,
+                    quality,
                 )
             }
         }

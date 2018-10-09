@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::Write;
+use std::fs::OpenOptions;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct BigsyMap {
