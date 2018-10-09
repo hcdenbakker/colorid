@@ -238,11 +238,11 @@ pub fn minimerize_vector_skip_n(
                 if seq::has_no_n(l[i..i + k].as_bytes()) {
                     if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
                         let min = find_minimizer(&l[i..i + k], m);
-                        let count = map.entry(min).or_insert(0);
+                        let count = map.entry(min.to_uppercase()).or_insert(0);
                         *count += 1;
                     } else {
                         let min = find_minimizer(&l_r[length_l - (i + k)..length_l - i], m);
-                        let count = map.entry(min).or_insert(0);
+                        let count = map.entry(min.to_uppercase()).or_insert(0);
                         *count += 1;
                     }
                 } else {
@@ -283,6 +283,49 @@ pub fn kmers_from_fq(filename: String, k: usize) -> fnv::FnvHashMap<std::string:
         line_count += 1;
     }
 
+    map
+}
+
+pub fn kmers_from_fq_qual(filename: String, k: usize, d: usize, qual_offset: u8) -> fnv::FnvHashMap<std::string::String, usize> {
+    let f = File::open(filename).expect("file not found");
+    let gz = MultiGzDecoder::new(f);
+    let iter = io::BufReader::new(gz).lines();
+    let mut map = fnv::FnvHashMap::default();
+    let mut line_count = 1;
+    let mut fastq = seq::Fastq::new();
+    let d = 1; //downsampler not used here so 1
+    for line in iter {
+        let l = line.unwrap();
+        if line_count % 4 == 1 {
+                    fastq.id = l.to_string();
+        } else if line_count % 4 == 2 {
+                    fastq.seq1 = l.to_owned();
+        } else if line_count % 4 == 0 {
+                    fastq.qual1 = l.to_owned();
+                    let masked1 = seq::qual_mask(fastq.seq1.to_owned(), fastq.qual1, qual_offset);
+                    for l in vec![masked1] {
+                        let length_l = l.len();
+                        let l_r = revcomp(&l);
+                        for i in 0..l.len() - k + 1 {
+                            if i % d == 0 {
+                                if seq::has_no_n(l[i..i + k].as_bytes()) {
+                                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                                        let count = map.entry(l[i..i + k].to_string()).or_insert(0);
+                                        *count += 1;
+                                    } else {
+                                        let count = map
+                                            .entry(
+                                                l_r[length_l - (i + k)..length_l - i].to_string(),
+                                            ).or_insert(0);
+                                        *count += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+        }
+        line_count += 1;
+    }
     map
 }
 
@@ -457,6 +500,119 @@ pub fn kmers_fq_pe_minimizer(
             }
             line_count += 1;
         }
+    }
+    map
+}
+
+pub fn kmers_fq_pe_minimizer_qual(
+    filenames: Vec<&str>,
+    k: usize,
+    m: usize,
+    d: usize,
+    qual_offset: u8,
+) -> fnv::FnvHashMap<std::string::String, usize> {
+    let mut line_count = 1;
+    let f = File::open(&filenames[0]).expect("file not found");
+    let f2 = File::open(&filenames[1]).expect("file not found");
+    let d1 = MultiGzDecoder::new(f);
+    let d2 = MultiGzDecoder::new(f2);
+    let iter1 = io::BufReader::new(d1).lines();
+    let mut iter2 = io::BufReader::new(d2).lines();
+    let mut map = fnv::FnvHashMap::default();
+    let mut fastq = seq::Fastq::new();
+    for line in iter1 {
+        let l = line.unwrap();
+        let line2 = iter2.next();
+        if line_count % 4 == 1 {
+            match line2 {
+                Some(h2) => {
+                    fastq.id = l.to_string();
+                }
+                None => break,
+            };
+        } else if line_count % 4 == 2 {
+            match line2 {
+                Some(l2) => {
+                    fastq.seq1 = l.to_owned();
+                    fastq.seq2 = l2.unwrap().to_owned();
+                }
+                None => break,
+            };
+        } else if line_count % 4 == 0 {
+            match line2 {
+                Some(l2) => {
+                    fastq.qual1 = l.to_owned();
+                    fastq.qual2 = l2.unwrap().to_owned();
+                    let masked1 = seq::qual_mask(fastq.seq1.to_owned(), fastq.qual1, qual_offset);
+                    let masked2 = seq::qual_mask(fastq.seq2.to_owned(), fastq.qual2, qual_offset);
+                    for l in vec![masked1, masked2] {
+                        let length_l = l.len();
+                        let l_r = revcomp(&l);
+                        for i in 0..l.len() - k + 1 {
+                            if i % d == 0 {
+                                if seq::has_no_n(l[i..i + k].as_bytes()) {
+                                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                                        let count = map.entry(find_minimizer(&l[i..i + k], m)).or_insert(0);
+                                        *count += 1;
+                                    } else {
+                                        let count = map
+                                            .entry(
+                                                find_minimizer(&l_r[length_l - (i + k)..length_l - i], m),
+                                            ).or_insert(0);
+                                        *count += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                None => break,
+            };
+        }
+        line_count += 1;
+    }
+    map
+}
+
+pub fn kmers_from_fq_minimizer_qual(filename: String, k: usize, m: usize, d: usize, qual_offset: u8) -> fnv::FnvHashMap<std::string::String, usize> {
+    let f = File::open(filename).expect("file not found");
+    let gz = MultiGzDecoder::new(f);
+    let iter = io::BufReader::new(gz).lines();
+    let mut map = fnv::FnvHashMap::default();
+    let mut line_count = 1;
+    let mut fastq = seq::Fastq::new();
+    let d = 1; //downsampler not used here so 1
+    for line in iter {
+        let l = line.unwrap();
+        if line_count % 4 == 1 {
+                    fastq.id = l.to_string();
+        } else if line_count % 4 == 2 {
+                    fastq.seq1 = l.to_owned();
+        } else if line_count % 4 == 0 {
+                    fastq.qual1 = l.to_owned();
+                    let masked1 = seq::qual_mask(fastq.seq1.to_owned(), fastq.qual1, qual_offset);
+                    for l in vec![masked1] {
+                        let length_l = l.len();
+                        let l_r = revcomp(&l);
+                        for i in 0..l.len() - k + 1 {
+                            if i % d == 0 {
+                                if seq::has_no_n(l[i..i + k].as_bytes()) {
+                                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                                        let count = map.entry(find_minimizer(&l[i..i + k], m)).or_insert(0);
+                                        *count += 1;
+                                    } else {
+                                        let count = map
+                                            .entry(
+                                                find_minimizer(&l_r[length_l - (i + k)..length_l - i], m),
+                                            ).or_insert(0);
+                                        *count += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+        }
+        line_count += 1;
     }
     map
 }

@@ -19,17 +19,18 @@ pub fn batch_search(
     filter: isize,
     cov: f64,
     gene_search: bool,
+    qual_offset: u8,
 ) {
     for (i, file1) in files1.iter().enumerate() {
         if file1.ends_with("gz") {
             let unfiltered = if files2.len() == 0 {
                 eprintln!("{}", file1);
                 eprintln!("Counting k-mers, this may take a while!");
-                kmer::kmers_from_fq(file1.to_owned().to_string(), k_size)
+                kmer::kmers_from_fq_qual(file1.to_owned().to_string(), k_size, 1, qual_offset)
             } else {
                 eprintln!("Paired end: {} {}", file1, files2[i]);
                 eprintln!("Counting k-mers, this may take a while!");
-                kmer::kmers_fq_pe_qual(vec![&file1, &files2[i]], k_size, 1, 15)
+                kmer::kmers_fq_pe_qual(vec![&file1, &files2[i]], k_size, 1, qual_offset)
             };
             let kmers_query = if filter < 0 {
                 let cutoff = kmer::auto_cutoff(unfiltered.to_owned());

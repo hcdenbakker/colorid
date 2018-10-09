@@ -519,7 +519,7 @@ pub fn per_read_stream_pe(
                                 d,
                             )
                         } else {
-                            kmer::minimerize_vector(
+                            kmer::minimerize_vector_skip_n(
                                 vec![r[1].to_string(), r[2].to_string()],
                                 k,
                                 m,
@@ -546,7 +546,7 @@ pub fn per_read_stream_pe(
                             } else {
                                 (
                                     r[0].to_owned(),
-                                    kmer_poll_mini(
+                                    kmer_poll_mini( //changed to normal
                                         &report,
                                         &map,
                                         &colors_accession,
@@ -706,7 +706,7 @@ pub fn per_read_stream_se(
                         (r[0].to_owned(), "too_short")
                     } else {
                         let map = if m == 0 {
-                            kmer::kmerize_vector(
+                            kmer::kmerize_vector_skip_n(
                                 vec![
                                     seq::qual_mask(r[1].to_string(), r[2].to_string(), qual_offset)
                                         .to_owned(),
@@ -715,7 +715,7 @@ pub fn per_read_stream_se(
                                 d,
                             )
                         } else {
-                            kmer::minimerize_vector(
+                            kmer::minimerize_vector_skip_n(
                                 vec![
                                     seq::qual_mask(r[1].to_string(), r[2].to_string(), qual_offset)
                                         .to_owned(),
@@ -778,9 +778,9 @@ pub fn per_read_stream_se(
                 (r[0].to_owned(), "too_short")
             } else {
                 let map = if m == 0 {
-                    kmer::kmerize_vector(vec![r[1].to_string()], k, d)
+                    kmer::kmerize_vector_skip_n(vec![r[1].to_string()], k, d)
                 } else {
-                    kmer::minimerize_vector(vec![r[1].to_string()], k, m, d)
+                    kmer::minimerize_vector_skip_n(vec![r[1].to_string()], k, m, d)
                 };
                 let report = search_index(&child_bigsi, &map, bloom_size, num_hash, no_hits_num);
                 if report.is_empty() {
