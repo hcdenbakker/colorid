@@ -35,7 +35,7 @@ fi
 
 # Test the output k-mer search
 echo "Testing the output";
-declare -a expected=(./test_data/SRR548019.fastq.gz	244500	Listeria_phage_B056	1.00	206.20	35	26691)
+declare -a expected=(./test_data/SRR548019.fastq.gz	187112	Listeria_phage_B056	1.00	185.95	8	26642)
 lastIndex=$((${#expected[@]} - 1))
 #echo "$lastIndex .. ${expected[@]}"
 for i in $(seq 0 $lastIndex); do
