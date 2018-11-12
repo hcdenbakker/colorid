@@ -15,7 +15,7 @@ static GLOBAL: System = System;
 
 fn main() {
     let matches = App::new("colorid")
-        .version("0.1.1")
+        .version("0.1.2")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .setting(AppSettings::ArgRequiredElseHelp)
@@ -245,7 +245,7 @@ fn main() {
                 )
                 .arg(
                     Arg::with_name("batch")
-                        .help("Sets size of batch of reads to be processed in parallel, currently only implemented for minimizers")
+                        .help("Sets size of batch of reads to be processed in parallel (default 50,000)")
                         .required(false)
                         .short("c")
                         .takes_value(true)
@@ -253,7 +253,7 @@ fn main() {
                 )
                 .arg(
                     Arg::with_name("threads")
-                        .help("number of threads to use, if not set the maximum available threads will be used")
+                        .help("number of threads to use, if not set the maximum available number threads will be used")
                         .required(false)
                         .short("t")
                         .takes_value(true)
@@ -277,7 +277,7 @@ fn main() {
                 )
                 .arg(
                     Arg::with_name("high_mem_load")
-                        .help("when this flag is set, a faster, but less memory efficient method to load the index is used ")
+                        .help("When this flag is set, a faster, but less memory efficient method to load the index is used. Loading the index requires approximately 2X the size of the index of RAM. ")
                         .required(false)
                         .short("H")
                         .takes_value(false)
@@ -285,7 +285,7 @@ fn main() {
                 )
                 .arg(
                     Arg::with_name("fp_correct")
-                        .help("parameter to correct for false positives, default 3 (= 0.001), maybe increased for larger searches")
+                        .help("Parameter to correct for false positives, default 3 (= 0.001), maybe increased for larger searches. Adjust for larger datasets")
                         .required(false)
                         .short("p")
                         .takes_value(true)
@@ -293,7 +293,7 @@ fn main() {
                 )
                 .arg(
                     Arg::with_name("quality")
-                        .help("minimum phred score to keep basepairs within read (default 15)")
+                        .help("kmers with nucleotides below this minimum phred score will be excluded from the analyses (default 15)")
                         .required(false)
                         .short("Q")
                         .takes_value(true)
