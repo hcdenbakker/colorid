@@ -7,6 +7,7 @@ use colorid::bigsi;
 use colorid::build;
 use colorid::read_id_mt_pe::false_prob;
 use std::alloc::System;
+use std::fs;
 use std::time::SystemTime;
 
 #[global_allocator]
@@ -275,6 +276,14 @@ fn main() {
                         .long("down_sample"),
                 )
                 .arg(
+                    Arg::with_name("high_mem_load")
+                        .help("when this flag is set, a faster, but less memory efficient method to load the index is used ")
+                        .required(false)
+                        .short("H")
+                        .takes_value(false)
+                        .long("high_mem_load"),
+                )
+                .arg(
                     Arg::with_name("fp_correct")
                         .help("parameter to correct for false positives, default 3 (= 0.001), maybe increased for larger searches")
                         .required(false)
@@ -366,7 +375,7 @@ fn main() {
                 build::build_multi_mini(&map, bloom, hashes, kmer, minimizer_value, threads)
             };
             println!("Saving BIGSI to file.");
-            let index = bigsi::BigsyMapMini{
+            let index = bigsi::BigsyMapMiniNew {
                 map: bigsi_map,
                 colors: colors_accession,
                 n_ref_kmers: n_ref_kmers,
@@ -374,9 +383,12 @@ fn main() {
                 num_hash: hashes,
                 k_size: kmer,
                 m_size: minimizer_value,
-            }; 
-            bigsi::save_bigsi_mini(&(matches.value_of("bigsi").unwrap().to_owned() + ".mxi"), &index);
-            /*
+            };
+            bigsi::save_bigsi_mini(
+                &(matches.value_of("bigsi").unwrap().to_owned() + ".mxi"),
+                &index,
+            );
+        /*
             bigsi::save_bigsi_mini(
                 bigsi_map.to_owned(),
                 colors_accession.to_owned(),
@@ -393,7 +405,7 @@ fn main() {
             } else {
                 build::build_multi(&map, bloom, hashes, kmer, threads)
             };
-            let index = bigsi::BigsyMap{
+            let index = bigsi::BigsyMapNew {
                 map: bigsi_map,
                 colors: colors_accession,
                 n_ref_kmers: n_ref_kmers,
@@ -404,7 +416,7 @@ fn main() {
             println!("Saving BIGSI to file.");
             bigsi::save_bigsi(
                 &(matches.value_of("bigsi").unwrap().to_owned() + ".bxi"),
-                &index
+                &index,
             );
         }
     }
@@ -429,8 +441,7 @@ fn main() {
         } else {
             let bigsi_time = SystemTime::now();
             eprintln!("Loading index");
-            let index =
-                bigsi::read_bigsi(matches.value_of("bigsi").unwrap());
+            let index = bigsi::read_bigsi(matches.value_of("bigsi").unwrap());
             match bigsi_time.elapsed() {
                 Ok(elapsed) => {
                     eprintln!("Index loaded in {} seconds", elapsed.as_secs());
@@ -515,12 +526,15 @@ fn main() {
                     "{} {} {:.3}",
                     a,
                     k_size,
-                    false_prob(bigsi.bloom_size as f64, bigsi.num_hash as f64, *k_size as f64)
+                    false_prob(
+                        bigsi.bloom_size as f64,
+                        bigsi.num_hash as f64,
+                        *k_size as f64
+                    )
                 );
             }
         } else {
-            let bigsi =
-                bigsi::read_bigsi(index);
+            let bigsi = bigsi::read_bigsi(index);
             match bigsi_time.elapsed() {
                 Ok(elapsed) => {
                     eprintln!("Index loaded in {} seconds", elapsed.as_secs());
@@ -546,7 +560,11 @@ fn main() {
                     "{} {} {:.3}",
                     a,
                     k_size,
-                    false_prob(bigsi.bloom_size as f64, bigsi.num_hash as f64, *k_size as f64)
+                    false_prob(
+                        bigsi.bloom_size as f64,
+                        bigsi.num_hash as f64,
+                        *k_size as f64
+                    )
                 );
             }
         }
@@ -563,10 +581,15 @@ fn main() {
         let prefix = matches.value_of("prefix").unwrap();
         let quality = value_t!(matches, "quality", u8).unwrap_or(15);
         let batch = value_t!(matches, "batch", usize).unwrap_or(50000);
-        eprintln!("Loading index");
+        let high_mem_load = matches.is_present("high_mem_load");
+
         if index.ends_with(".mxi") {
-            let bigsi =
-                bigsi::read_bigsi_mini(matches.value_of("bigsi").unwrap());
+            //let metadata = fs::metadata(&index).expect("Can't read metadata index!");
+            let bigsi = if high_mem_load {
+                bigsi::read_bigsi_mini_highmem(index)
+            } else {
+                bigsi::read_bigsi_mini(index)
+            };
             match bigsi_time.elapsed() {
                 Ok(elapsed) => {
                     eprintln!("Index loaded in {} seconds", elapsed.as_secs());
@@ -630,8 +653,11 @@ fn main() {
                 );
             }
         } else {
-            let bigsi =
-                bigsi::read_bigsi(matches.value_of("bigsi").unwrap());
+            let bigsi = if high_mem_load {
+                bigsi::read_bigsi_highmem(index)
+            } else {
+                bigsi::read_bigsi(index)
+            };
             match bigsi_time.elapsed() {
                 Ok(elapsed) => {
                     eprintln!("Index loaded in {} seconds", elapsed.as_secs());
@@ -695,7 +721,7 @@ fn main() {
                 );
             }
         }
-        colorid::reports::read_counts(prefix.to_owned() + "_reads.txt", prefix);
+        colorid::reports::read_counts_five_fields(prefix.to_owned() + "_reads.txt", prefix);
     }
     if let Some(matches) = matches.subcommand_matches("read_filter") {
         let classification = matches.value_of("classification").unwrap();

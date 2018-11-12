@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 pub fn batch_search(
     files: Vec<&str>,
-    bigsi_map: &fnv::FnvHashMap<usize, Vec<u8>>,
+    bigsi_map: &fnv::FnvHashMap<usize, BitVec>,
     colors_accession: &fnv::FnvHashMap<usize, String>,
     _n_ref_kmers: &fnv::FnvHashMap<String, usize>,
     bloom_size: usize,
@@ -39,10 +39,10 @@ pub fn batch_search(
             eprintln!("No perfect hits!");
         } else {
             //bit-wise AND
-            let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
+            let mut first = kmer_slices[0].to_owned();
             for i in 1..(num_hash * kmers_query.len()) {
                 let j = i as usize;
-                first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
+                first.intersect(&kmer_slices[j]);
             }
             let mut hits = Vec::new();
             for i in 0..first.len() {
@@ -60,7 +60,7 @@ pub fn batch_search(
 
 pub fn batch_search_mf(
     files: Vec<&str>,
-    bigsi_map: &fnv::FnvHashMap<usize, Vec<u8>>,
+    bigsi_map: &fnv::FnvHashMap<usize, BitVec>,
     colors_accession: &fnv::FnvHashMap<usize, String>,
     _n_ref_kmers: &fnv::FnvHashMap<String, usize>,
     bloom_size: usize,
@@ -93,10 +93,10 @@ pub fn batch_search_mf(
                 eprintln!("No perfect hits!");
             } else {
                 //bit-wise AND
-                let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
+                let mut first = kmer_slices[0].to_owned();
                 for i in 1..(num_hash * kmers_query.len()) {
                     let j = i as usize;
-                    first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
+                    first.intersect(&kmer_slices[j]);
                 }
                 let mut hits = Vec::new();
                 for i in 0..first.len() {

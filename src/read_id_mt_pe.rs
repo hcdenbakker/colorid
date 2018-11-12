@@ -40,14 +40,14 @@ pub fn false_prob_map(
 }
 
 pub fn search_index(
-    bigsi_map: &fnv::FnvHashMap<usize, Vec<u8>>,
+    bigsi_map: &fnv::FnvHashMap<usize, BitVec>,
     map: &fnv::FnvHashMap<std::string::String, usize>,
     bloom_size: usize,
     num_hash: usize,
     no_hits_num: usize,
 ) -> fnv::FnvHashMap<usize, usize> {
     let mut report = fnv::FnvHashMap::default();
-    let empty_bitvec = BitVec::from_elem(no_hits_num, false).to_bytes();
+    let empty_bitvec = BitVec::from_elem(no_hits_num, false);
     for k in map.keys() {
         let mut kmer_slices = Vec::new();
         for i in 0..num_hash {
@@ -64,10 +64,10 @@ pub fn search_index(
             *report.entry(no_hits_num).or_insert(0) += 1;
             break;
         } else {
-            let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
+            let mut first = kmer_slices[0].to_owned();
             for i in 1..num_hash {
                 let j = i as usize;
-                first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
+                first.intersect(&kmer_slices[j]);
             }
             let mut color = 0;
             for item in first {
@@ -176,21 +176,20 @@ pub fn kmer_poll_mini<'a>(
     }
 }
 
-/*//kmer poll classification plus raw count data as output
-pub fn kmer_poll_plus<'a, 'b>(
-    report: &'b std::collections::HashMap<usize, usize>,
-    map: &std::collections::HashMap<std::string::String, usize>,
-    colors_accession: &'a std::collections::HashMap<usize, String>,
-    child_fp: &std::collections::HashMap<usize, f64>,
+//kmer poll classification plus raw count data as output
+pub fn kmer_poll_plus<'a>(
+    report: &fnv::FnvHashMap<usize, usize>,
+    map: &fnv::FnvHashMap<std::string::String, usize>,
+    colors_accession: &'a fnv::FnvHashMap<usize, String>,
+    child_fp: &fnv::FnvHashMap<usize, f64>,
     no_hits_num: usize,
     fp_correct: f64,
-) -> (&'a str, Vec<(& 'b usize, & 'b usize)>) {
+) -> (&'a str, usize, usize, &'a str) {
     let mut count_vec: Vec<_> = report.iter().collect();
     count_vec.sort_by(|a, b| b.1.cmp(a.1));
     let kmer_length = map.len();
     if (count_vec[0].0 == &no_hits_num) && (count_vec.len() == 1) {
-        let zero: usize = 0;
-        ("no_hits", vec![(&no_hits_num, &zero)])
+        return ("no_hits", 0 as usize, kmer_length, "accept");
     };
     if count_vec[0].0 == &no_hits_num {
         let top_hit = count_vec[1].0;
@@ -201,9 +200,19 @@ pub fn kmer_poll_plus<'a, 'b>(
         if ((count_vec[1].1.to_owned() as f64) < critical_value)
             || (((count_vec[1].1.to_owned() as f64) > critical_value) && (mpf >= fp_correct))
         {
-            ("no_hits", count_vec)
+            (
+                &colors_accession[&top_hit],
+                count_vec[1].1.to_owned(),
+                kmer_length,
+                "reject",
+            )
         } else {
-            (&colors_accession[&top_hit], count_vec)
+            (
+                &colors_accession[&top_hit],
+                count_vec[1].1.to_owned(),
+                kmer_length,
+                "accept",
+            )
         }
     } else {
         let top_hit = count_vec[0].0;
@@ -214,12 +223,22 @@ pub fn kmer_poll_plus<'a, 'b>(
         if ((count_vec[0].1.to_owned() as f64) < critical_value)
             || (((count_vec[0].1.to_owned() as f64) > critical_value) && (mpf >= fp_correct))
         {
-            ("no_hits", count_vec)
+            (
+                &colors_accession[&top_hit],
+                count_vec[0].1.to_owned(),
+                kmer_length,
+                "reject",
+            )
         } else {
-            (&colors_accession[&top_hit], count_vec)
+            (
+                &colors_accession[&top_hit],
+                count_vec[0].1.to_owned(),
+                kmer_length,
+                "accept",
+            )
         }
     }
-}*/
+}
 
 pub struct Fasta {
     pub id: String,  //id including >
@@ -237,7 +256,7 @@ impl Fasta {
 
 pub fn stream_fasta(
     filenames: Vec<&str>,
-    bigsi_map: &fnv::FnvHashMap<usize, Vec<u8>>, //has to be an Arc ?
+    bigsi_map: &fnv::FnvHashMap<usize, BitVec>, //has to be an Arc ?
     colors_accession: &fnv::FnvHashMap<usize, String>,
     ref_kmers_in: &fnv::FnvHashMap<String, usize>,
     bloom_size: usize,
@@ -264,9 +283,9 @@ pub fn stream_fasta(
     ThreadPoolBuilder::new()
         .num_threads(t)
         .build_global()
-        .unwrap();
+        .expect("Can't initialize ThreadPoolBuilder");
     let false_positive_p = false_prob_map(colors_accession, ref_kmers_in, bloom_size, num_hash);
-    let my_bigsi: Arc<&fnv::FnvHashMap<usize, Vec<u8>>> = Arc::new(bigsi_map);
+    let my_bigsi: Arc<&fnv::FnvHashMap<usize, BitVec>> = Arc::new(bigsi_map);
     let false_positive_p_arc: Arc<fnv::FnvHashMap<usize, f64>> = Arc::new(false_positive_p);
     let search_time = SystemTime::now();
     let mut count = 0;
@@ -296,7 +315,13 @@ pub fn stream_fasta(
                     let child_bigsi = my_bigsi.clone();
                     let child_fp = false_positive_p_arc.clone();
                     if r[1].len() < k {
-                        (r[0].to_owned(), "too_short")
+                        (
+                            r[0].to_owned(),
+                            "too_short",
+                            0 as usize,
+                            0 as usize,
+                            "accept",
+                        )
                     } else {
                         let map = if m == 0 {
                             kmer::kmerize_vector_skip_n(vec![r[1].to_string()], k, d)
@@ -306,41 +331,32 @@ pub fn stream_fasta(
                         let report =
                             search_index(&child_bigsi, &map, bloom_size, num_hash, no_hits_num);
                         if report.is_empty() {
-                            (r[0].to_owned(), "no_hits")
+                            (r[0].to_owned(), "no_hits", 0 as usize, map.len(), "accept")
                         } else {
-                            if m == 0 {
-                                (
-                                    r[0].to_owned(),
-                                    kmer_poll(
-                                        &report,
-                                        &map,
-                                        &colors_accession,
-                                        &child_fp,
-                                        no_hits_num,
-                                        fp_correct,
-                                    ),
-                                )
-                            } else {
-                                (
-                                    r[0].to_owned(),
-                                    kmer_poll_mini(
-                                        &report,
-                                        &map,
-                                        &colors_accession,
-                                        &child_fp,
-                                        no_hits_num,
-                                        fp_correct,
-                                    ),
-                                )
-                            }
+                            let classification = kmer_poll_plus(
+                                &report,
+                                &map,
+                                &colors_accession,
+                                &child_fp,
+                                no_hits_num,
+                                fp_correct,
+                            );
+                            (
+                                r[0].to_owned(),
+                                classification.0,
+                                classification.1.to_owned(),
+                                classification.2.to_owned(),
+                                classification.3,
+                            )
                         }
                     }
                 }).collect();
             read_count += c.len();
             eprint!(" {} reads classified\r", read_count);
             for id in c {
-                file.write_all(format!("{}\t {}\n", id.0, id.1).as_bytes())
-                    .expect("could not write results!");
+                file.write_all(
+                    format!("{}\t{}\t{}\t{}\t{}\n", id.0, id.1, id.2, id.3, id.4).as_bytes(),
+                ).expect("could not write results!");
             }
             vec.clear();
         }
@@ -354,7 +370,13 @@ pub fn stream_fasta(
             let child_bigsi = my_bigsi.clone();
             let child_fp = false_positive_p_arc.clone();
             if r[1].len() < k {
-                (r[0].to_owned(), "too_short")
+                (
+                    r[0].to_owned(),
+                    "too_short",
+                    0 as usize,
+                    0 as usize,
+                    "accept",
+                )
             } else {
                 let map = if m == 0 {
                     kmer::kmerize_vector_skip_n(vec![r[1].to_string()], k, d)
@@ -363,39 +385,29 @@ pub fn stream_fasta(
                 };
                 let report = search_index(&child_bigsi, &map, bloom_size, num_hash, no_hits_num);
                 if report.is_empty() {
-                    (r[0].to_owned(), "no hits")
+                    (r[0].to_owned(), "no_hits", 0 as usize, map.len(), "accept")
                 } else {
-                    if m == 0 {
-                        (
-                            r[0].to_owned(),
-                            kmer_poll(
-                                &report,
-                                &map,
-                                &colors_accession,
-                                &child_fp,
-                                no_hits_num,
-                                fp_correct,
-                            ),
-                        )
-                    } else {
-                        (
-                            r[0].to_owned(),
-                            kmer_poll_mini(
-                                &report,
-                                &map,
-                                &colors_accession,
-                                &child_fp,
-                                no_hits_num,
-                                fp_correct,
-                            ),
-                        )
-                    }
+                    let classification = kmer_poll_plus(
+                        &report,
+                        &map,
+                        &colors_accession,
+                        &child_fp,
+                        no_hits_num,
+                        fp_correct,
+                    );
+                    (
+                        r[0].to_owned(),
+                        classification.0,
+                        classification.1.to_owned(),
+                        classification.2.to_owned(),
+                        classification.3,
+                    )
                 }
             }
         }).collect();
     read_count += c.len();
     for id in c {
-        file.write_all(format!("{}\t {}\n", id.0, id.1).as_bytes())
+        file.write_all(format!("{}\t{}\t{}\t{}\t{}\n", id.0, id.1, id.2, id.3, id.4).as_bytes())
             .expect("could not write results!");
     }
     eprint!(" {} reads classified\r", read_count);
@@ -411,23 +423,7 @@ pub fn stream_fasta(
             // an error occurred!
             eprintln!("Error: {:?}", e);
         }
-    } /*
-    let mut file =
-        File::create(format!("{}_reads.txt", prefix)).expect("could not create outfile!");
-    for id in master_vec {
-        file.write_all(format!("{}\t {}\n", id.0, id.1).as_bytes())
-            .expect("could not write results!");
-        /*let count = tax_map.entry(id.1.to_string()).or_insert(0);
-        *count += 1;*/
     }
-    let mut count_file =
-        File::create(format!("{}_counts.txt", prefix)).expect("could not create outfile!");
-    for (k, v) in &tax_map {
-        count_file
-            .write_all(format!("{}\t {}\n", k, v).as_bytes())
-            .expect("could not write count results!");
-    }
-    tax_map*/
 }
 
 pub fn false_prob(m: f64, k: f64, n: f64) -> f64 {
@@ -437,7 +433,7 @@ pub fn false_prob(m: f64, k: f64, n: f64) -> f64 {
 
 pub fn per_read_stream_pe(
     filenames: Vec<&str>,
-    bigsi_map: &fnv::FnvHashMap<usize, Vec<u8>>, //has to be an Arc
+    bigsi_map: &fnv::FnvHashMap<usize, BitVec>, //has to be an Arc
     colors_accession: &fnv::FnvHashMap<usize, String>,
     ref_kmers_in: &fnv::FnvHashMap<String, usize>,
     bloom_size: usize,
@@ -468,9 +464,9 @@ pub fn per_read_stream_pe(
     ThreadPoolBuilder::new()
         .num_threads(t)
         .build_global()
-        .unwrap();
+        .expect("Can't initialize ThreadPoolBuilder");
     let false_positive_p = false_prob_map(colors_accession, ref_kmers_in, bloom_size, num_hash);
-    let my_bigsi: Arc<&fnv::FnvHashMap<usize, Vec<u8>>> = Arc::new(bigsi_map);
+    let my_bigsi: Arc<&fnv::FnvHashMap<usize, BitVec>> = Arc::new(bigsi_map);
     let false_positive_p_arc: Arc<fnv::FnvHashMap<usize, f64>> = Arc::new(false_positive_p);
     let mut read_count = 0;
     let mut header = "".to_string();
@@ -510,7 +506,13 @@ pub fn per_read_stream_pe(
                     let child_bigsi = my_bigsi.clone();
                     let child_fp = false_positive_p_arc.clone();
                     if (r[1].len() < k) || (r[2].len() < k) {
-                        (r[0].to_owned(), "too_short")
+                        (
+                            r[0].to_owned(),
+                            "too_short",
+                            0 as usize,
+                            0 as usize,
+                            "accept",
+                        )
                     } else {
                         let map = if m == 0 {
                             kmer::kmerize_vector_skip_n(
@@ -529,40 +531,30 @@ pub fn per_read_stream_pe(
                         let report =
                             search_index(&child_bigsi, &map, bloom_size, num_hash, no_hits_num);
                         if report.is_empty() {
-                            (r[0].to_owned(), "no_hits")
+                            (r[0].to_owned(), "no_hits", 0 as usize, map.len(), "accept")
                         } else {
-                            if m == 0 {
-                                (
-                                    r[0].to_owned(),
-                                    kmer_poll(
-                                        &report,
-                                        &map,
-                                        &colors_accession,
-                                        &child_fp,
-                                        no_hits_num,
-                                        fp_correct,
-                                    ),
-                                )
-                            } else {
-                                (
-                                    r[0].to_owned(),
-                                    kmer_poll_mini( //changed to normal
-                                        &report,
-                                        &map,
-                                        &colors_accession,
-                                        &child_fp,
-                                        no_hits_num,
-                                        fp_correct,
-                                    ),
-                                )
-                            }
-                        }
+                            let classification = kmer_poll_plus(
+                                &report,
+                                &map,
+                                &colors_accession,
+                                &child_fp,
+                                no_hits_num,
+                                fp_correct,
+                            );
+                            (
+                                r[0].to_owned(),
+                                classification.0,
+                                classification.1.to_owned(),
+                                classification.2.to_owned(),
+                                classification.3,
+                            )
+                        } //else
                     }
                 }).collect();
             read_count += c.len();
             eprint!("{} read pairs classified\r", read_count);
             for id in c {
-                file.write_all(format!("{}\t {}\n", id.0, id.1).as_bytes())
+                file.write_all(format!("{}\t{}\t{}\t{}\t{}\n", id.0, id.1, id.2, id.3, id.4).as_bytes())
                     .expect("could not write results!");
             }
             vec.clear();
@@ -576,7 +568,13 @@ pub fn per_read_stream_pe(
             let child_bigsi = my_bigsi.clone();
             let child_fp = false_positive_p_arc.clone();
             if (r[1].len() < k) || (r[2].len() < k) {
-                (r[0].to_owned(), "too_short")
+                (
+                    r[0].to_owned(),
+                    "too_short",
+                    0 as usize,
+                    0 as usize,
+                    "accept",
+                )
             } else {
                 let map = if m == 0 {
                     kmer::kmerize_vector_skip_n(vec![r[1].to_string(), r[2].to_string()], k, d)
@@ -590,40 +588,30 @@ pub fn per_read_stream_pe(
                 };
                 let report = search_index(&child_bigsi, &map, bloom_size, num_hash, no_hits_num);
                 if report.is_empty() {
-                    (r[0].to_owned(), "no_hits")
+                    (r[0].to_owned(), "no_hits", 0 as usize, map.len(), "accept")
                 } else {
-                    if m == 0 {
-                        (
-                            r[0].to_owned(),
-                            kmer_poll(
-                                &report,
-                                &map,
-                                &colors_accession,
-                                &child_fp,
-                                no_hits_num,
-                                fp_correct,
-                            ),
-                        )
-                    } else {
-                        (
-                            r[0].to_owned(),
-                            kmer_poll_mini(
-                                &report,
-                                &map,
-                                &colors_accession,
-                                &child_fp,
-                                no_hits_num,
-                                fp_correct,
-                            ),
-                        )
-                    }
-                }
+                    let classification = kmer_poll_plus(
+                        &report,
+                        &map,
+                        &colors_accession,
+                        &child_fp,
+                        no_hits_num,
+                        fp_correct,
+                    );
+                    (
+                        r[0].to_owned(),
+                        classification.0,
+                        classification.1.to_owned(),
+                        classification.2.to_owned(),
+                        classification.3,
+                    )
+                } //else
             }
         }).collect();
     read_count += c.len();
     eprint!("{} read pairs classified\r", read_count);
     for id in c {
-        file.write_all(format!("{}\t {}\n", id.0, id.1).as_bytes())
+        file.write_all(format!("{}\t{}\t{}\t{}\t{}\n", id.0, id.1, id.2, id.3, id.4).as_bytes())
             .expect("could not write results!");
     }
     match search_time.elapsed() {
@@ -643,7 +631,7 @@ pub fn per_read_stream_pe(
 
 pub fn per_read_stream_se(
     filenames: Vec<&str>,
-    bigsi_map: &fnv::FnvHashMap<usize, Vec<u8>>, //has to be an Arc ?
+    bigsi_map: &fnv::FnvHashMap<usize, BitVec>, //has to be an Arc ?
     colors_accession: &fnv::FnvHashMap<usize, String>,
     ref_kmers_in: &fnv::FnvHashMap<String, usize>,
     bloom_size: usize,
@@ -675,10 +663,10 @@ pub fn per_read_stream_se(
     ThreadPoolBuilder::new()
         .num_threads(t)
         .build_global()
-        .unwrap();
+        .expect("Can't initialize ThreadPoolBuilder");
     let false_positive_p = false_prob_map(colors_accession, ref_kmers_in, bloom_size, num_hash);
 
-    let my_bigsi: Arc<&fnv::FnvHashMap<usize, Vec<u8>>> = Arc::new(bigsi_map);
+    let my_bigsi: Arc<&fnv::FnvHashMap<usize, BitVec>> = Arc::new(bigsi_map);
     let false_positive_p_arc: Arc<fnv::FnvHashMap<usize, f64>> = Arc::new(false_positive_p);
     let mut fastq = seq::Fastq::new();
     for line in iter1 {
@@ -703,7 +691,13 @@ pub fn per_read_stream_se(
                     let child_bigsi = my_bigsi.clone();
                     let child_fp = false_positive_p_arc.clone();
                     if r[1].len() < k {
-                        (r[0].to_owned(), "too_short")
+                        (
+                            r[0].to_owned(),
+                            "too_short",
+                            0 as usize,
+                            0 as usize,
+                            "accept",
+                        )
                     } else {
                         let map = if m == 0 {
                             kmer::kmerize_vector_skip_n(
@@ -728,40 +722,30 @@ pub fn per_read_stream_se(
                         let report =
                             search_index(&child_bigsi, &map, bloom_size, num_hash, no_hits_num);
                         if report.is_empty() {
-                            (r[0].to_owned(), "no_hits")
+                            (r[0].to_owned(), "no_hits", 0 as usize, 0 as usize, "accept")
                         } else {
-                            if m == 0 {
-                                (
-                                    r[0].to_owned(),
-                                    kmer_poll(
-                                        &report,
-                                        &map,
-                                        &colors_accession,
-                                        &child_fp,
-                                        no_hits_num,
-                                        fp_correct,
-                                    ),
-                                )
-                            } else {
-                                (
-                                    r[0].to_owned(),
-                                    kmer_poll_mini(
-                                        &report,
-                                        &map,
-                                        &colors_accession,
-                                        &child_fp,
-                                        no_hits_num,
-                                        fp_correct,
-                                    ),
-                                )
-                            }
+                            let classification = kmer_poll_plus(
+                                &report,
+                                &map,
+                                &colors_accession,
+                                &child_fp,
+                                no_hits_num,
+                                fp_correct,
+                            );
+                            (
+                                r[0].to_owned(),
+                                classification.0,
+                                classification.1.to_owned(),
+                                classification.2.to_owned(),
+                                classification.3,
+                            )
                         }
                     }
                 }).collect();
             read_count += c.len();
             eprint!("{} read pairs classified\r", read_count);
             for id in c {
-                file.write_all(format!("{}\t {}\n", id.0, id.1).as_bytes())
+                file.write_all(format!("{}\t{}\t{}\t{}\t{}\n", id.0, id.1, id.2, id.3, id.4).as_bytes())
                     .expect("could not write results!");
             }
             vec.clear();
@@ -775,7 +759,13 @@ pub fn per_read_stream_se(
             let child_bigsi = my_bigsi.clone();
             let child_fp = false_positive_p_arc.clone();
             if r[1].len() < k {
-                (r[0].to_owned(), "too_short")
+                (
+                    r[0].to_owned(),
+                    "too_short",
+                    0 as usize,
+                    0 as usize,
+                    "accept",
+                )
             } else {
                 let map = if m == 0 {
                     kmer::kmerize_vector_skip_n(vec![r[1].to_string()], k, d)
@@ -784,40 +774,30 @@ pub fn per_read_stream_se(
                 };
                 let report = search_index(&child_bigsi, &map, bloom_size, num_hash, no_hits_num);
                 if report.is_empty() {
-                    (r[0].to_owned(), "no_hitsi")
+                    (r[0].to_owned(), "no_hits", 0 as usize, 0 as usize, "accept")
                 } else {
-                    if m == 0 {
-                        (
-                            r[0].to_owned(),
-                            kmer_poll(
-                                &report,
-                                &map,
-                                &colors_accession,
-                                &child_fp,
-                                no_hits_num,
-                                fp_correct,
-                            ),
-                        )
-                    } else {
-                        (
-                            r[0].to_owned(),
-                            kmer_poll_mini(
-                                &report,
-                                &map,
-                                &colors_accession,
-                                &child_fp,
-                                no_hits_num,
-                                fp_correct,
-                            ),
-                        )
-                    }
-                }
+                    let classification = kmer_poll_plus(
+                        &report,
+                        &map,
+                        &colors_accession,
+                        &child_fp,
+                        no_hits_num,
+                        fp_correct,
+                    );
+                    (
+                        r[0].to_owned(),
+                        classification.0,
+                        classification.1.to_owned(),
+                        classification.2.to_owned(),
+                        classification.3,
+                    )
+                } //else
             }
         }).collect();
     read_count += c.len();
     eprint!("{} read pairs classified\r", read_count);
     for id in c {
-        file.write_all(format!("{}\t {}\n", id.0, id.1).as_bytes())
+        file.write_all(format!("{}\t{}\t{}\t{}\t{}\n", id.0, id.1, id.2, id.3, id.4).as_bytes())
             .expect("could not write results!");
     }
     match search_time.elapsed() {

@@ -38,7 +38,7 @@ pub fn build_single(
     k_size: usize,
 ) -> (
     //std::collections::HashMap<usize, bit_vec::BitVec>,
-    fnv::FnvHashMap<usize, Vec<u8>>,
+    fnv::FnvHashMap<usize, BitVec>,
     fnv::FnvHashMap<usize, String>,
     fnv::FnvHashMap<String, usize>,
 ) {
@@ -107,7 +107,7 @@ pub fn build_single(
         if bitvec.none() {
             continue;
         } else {
-            bigsi_map.insert(i, bitvec.to_bytes());
+            bigsi_map.insert(i, bitvec);
         }
     }
     (bigsi_map, colors_accession, ref_kmer)
@@ -121,7 +121,7 @@ pub fn build_multi(
     t: usize,
 ) -> (
     //std::collections::HashMap<usize, bit_vec::BitVec>,
-    fnv::FnvHashMap<usize, Vec<u8>>,
+    fnv::FnvHashMap<usize, BitVec>,
     fnv::FnvHashMap<usize, String>,
     fnv::FnvHashMap<String, usize>,
 ) {
@@ -217,7 +217,7 @@ pub fn build_multi(
         if t.1.none() {
             continue;
         } else {
-            bigsi_map.insert(t.0.to_owned(), t.1.to_bytes());
+            bigsi_map.insert(t.0.to_owned(), t.1);
         }
     }
     /*
@@ -246,7 +246,7 @@ pub fn build_multi_mini(
     t: usize,
 ) -> (
     //std::collections::HashMap<usize, bit_vec::BitVec>,
-    fnv::FnvHashMap<usize, Vec<u8>>,
+    fnv::FnvHashMap<usize, BitVec>,
     fnv::FnvHashMap<usize, String>,
     fnv::FnvHashMap<String, usize>,
 ) {
@@ -272,7 +272,8 @@ pub fn build_multi_mini(
         .par_iter()
         .map(|l| {
             if l.1.len() == 2 {
-                let unfiltered = kmer::kmers_fq_pe_minimizer_qual(vec![&l.1[0], &l.1[1]], k_size, m, 1, 15);
+                let unfiltered =
+                    kmer::kmers_fq_pe_minimizer_qual(vec![&l.1[0], &l.1[1]], k_size, m, 1, 15);
                 let cutoff = kmer::auto_cutoff(unfiltered.to_owned());
                 let kmers = kmer::clean_map(unfiltered, cutoff);
                 let mut filter =
@@ -283,7 +284,8 @@ pub fn build_multi_mini(
                 (l.0, filter.bits, kmers.len())
             } else {
                 if l.1[0].ends_with("gz") {
-                    let unfiltered = kmer::kmers_from_fq_minimizer_qual(l.1[0].to_owned(), k_size, m, 1, 15);
+                    let unfiltered =
+                        kmer::kmers_from_fq_minimizer_qual(l.1[0].to_owned(), k_size, m, 1, 15);
                     let cutoff = kmer::auto_cutoff(unfiltered.to_owned());
                     let kmers = kmer::clean_map(unfiltered, cutoff);
                     let mut filter =
@@ -341,7 +343,7 @@ pub fn build_multi_mini(
         if t.1.none() {
             continue;
         } else {
-            bigsi_map.insert(t.0.to_owned(), t.1.to_bytes());
+            bigsi_map.insert(t.0.to_owned(), t.1);
         }
     }
     /*
@@ -369,7 +371,7 @@ pub fn build_single_mini(
     m: usize,
 ) -> (
     //std::collections::HashMap<usize, bit_vec::BitVec>,
-    fnv::FnvHashMap<usize, Vec<u8>>,
+    fnv::FnvHashMap<usize, BitVec>,
     fnv::FnvHashMap<usize, String>,
     fnv::FnvHashMap<String, usize>,
 ) {
@@ -383,7 +385,7 @@ pub fn build_single_mini(
         eprintln!("Adding {} to index ({}/{})", accession, counter, map_length);
         counter += 1;
         if v.len() == 2 {
-            let unfiltered = kmer::kmers_fq_pe_qual(vec![&v[0], &v[1]], k_size, 1, 15) ;
+            let unfiltered = kmer::kmers_fq_pe_qual(vec![&v[0], &v[1]], k_size, 1, 15);
             let cutoff = kmer::auto_cutoff(unfiltered.to_owned());
             let kmers = kmer::clean_map(unfiltered, cutoff);
             let mut filter = simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
@@ -438,7 +440,7 @@ pub fn build_single_mini(
         if bitvec.none() {
             continue;
         } else {
-            bigsi_map.insert(i, bitvec.to_bytes());
+            bigsi_map.insert(i, bitvec);
         }
     }
     (bigsi_map, colors_accession, ref_kmer)

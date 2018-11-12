@@ -5,7 +5,7 @@ authors = ["henk den bakker"]
 
 [dependencies]
 clap = "2.30.0"
-bit-vec = "0.5.0"
+bit-vec = { path = "./bit-vec_serde" }
 murmurhash64 = "0.3.1"
 fasthash = "0.3.2"
 serde = "^1.0.63"
@@ -17,4 +17,4 @@ indexmap = "1.0.0"
 probability = "0.15.11"
 rayon = "1.0.2"
 fnv = "1.0.6"
-
+systemstat = "0.1.3"

@@ -10,7 +10,7 @@ use std::time::SystemTime;
 pub fn batch_search(
     files1: Vec<&str>,
     files2: Vec<&str>,
-    bigsi_map: &fnv::FnvHashMap<usize, Vec<u8>>,
+    bigsi_map: &fnv::FnvHashMap<usize, BitVec>,
     colors_accession: &fnv::FnvHashMap<usize, String>,
     n_ref_kmers: &fnv::FnvHashMap<String, usize>,
     bloom_size: usize,
@@ -58,10 +58,10 @@ pub fn batch_search(
                 if kmer_slices.len() < num_hash {
                     continue;
                 } else {
-                    let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
+                    let mut first = kmer_slices[0].to_owned();
                     for i in 1..num_hash {
                         let j = i as usize;
-                        first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
+                        first.intersect(&kmer_slices[j]).to_owned();
                     }
                     let mut hits = Vec::new();
                     for i in 0..first.len() {
@@ -138,10 +138,10 @@ pub fn batch_search(
                 if kmer_slices.len() < num_hash {
                     continue;
                 } else {
-                    let mut first = BitVec::from_bytes(&kmer_slices[0].to_owned());
+                    let mut first = kmer_slices[0].to_owned();
                     for i in 1..num_hash {
                         let j = i as usize;
-                        first.intersect(&BitVec::from_bytes(&kmer_slices[j]));
+                        first.intersect(&kmer_slices[j]);
                     }
                     let mut hits = Vec::new();
                     for i in 0..first.len() {
