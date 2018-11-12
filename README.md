@@ -109,7 +109,31 @@ The first column gives us the query name, the second accesion in the index with 
 
 ## Classifying reads with read_id
 
-This subcommand uses a simple majority-rule algorithm to classify reads, and the results can be used with the read_filter subcommand to either create a read file for a specific taxon, or filter a specific taxon from a read file. Write up to follow soon! 
+This subcommand uses a simple majority-rule algorithm to classify reads, and the results can be used with the read_filter subcommand to either create a read file for a specific taxon, or filter a specific taxon from a read file.
+```
+USAGE:
+    colorid read_id [FLAGS] [OPTIONS] --bigsi <bigsi> --prefix <prefix> --query <query>
+
+FLAGS:
+    -h, --help             Prints help information
+    -H, --high_mem_load    When this flag is set, a faster, but less memory efficient method to load the index is used.
+                           Loading the index requires approximately 2X the size of the index of RAM. 
+    -V, --version          Prints version information
+
+OPTIONS:
+    -c, --batch <batch>                Sets size of batch of reads to be processed in parallel (default 50,000)
+    -b, --bigsi <bigsi>                index to be used for search
+    -d, --down_sample <down_sample>    down-sample k-mers used for read classification, default 1; increases speed at
+                                       cost of decreased sensitivity 
+    -p, --fp_correct <fp_correct>      Parameter to correct for false positives, default 3 (= 0.001), maybe increased
+                                       for larger searches. Adjust for larger datasets
+    -n, --prefix <prefix>              prefix for output file(-s)
+    -Q, --quality <quality>            kmers with nucleotides below this minimum phred score will be excluded from the
+                                       analyses (default 15)
+    -q, --query <query>                query file(-s)fastq.gz
+    -t, --threads <threads>            number of threads to use, if not set the maximum available number threads will be
+                                       used
+```
 
 ## Acknowledgements
 Lee Katz (https://github.com/lskatz) for his help with setting up Travis CI! 
