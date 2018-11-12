@@ -90,7 +90,31 @@ pub fn read_counts(file_name: String, prefix: &str) {
         File::create(format!("{}_counts.txt", prefix)).expect("could not create outfile!");
     for (key, value) in &count_map {
         count_file
-            .write_all(format!("{}\t {}\n", key, value).as_bytes())
+            .write_all(format!("{}\t{}\n", key, value).as_bytes())
+            .expect("could not write count results!");
+    }
+}
+
+pub fn read_counts_five_fields(file_name: String, prefix: &str) {
+    let f = File::open(file_name).expect("file not found");
+    let iter = io::BufReader::new(f).lines();
+    let mut count_map = fnv::FnvHashMap::default();
+    for line in iter {
+        let l = line.unwrap().to_string();
+        let v: Vec<&str> = l.split('\t').collect();
+        if v[4].to_owned() == "accept" {
+            let count = count_map.entry(v[1].to_owned()).or_insert(0);
+            *count += 1;
+        } else {
+            let count = count_map.entry("reject".to_string()).or_insert(0);
+            *count += 1;
+        }
+    }
+    let mut count_file =
+        File::create(format!("{}_counts.txt", prefix)).expect("could not create outfile!");
+    for (key, value) in &count_map {
+        count_file
+            .write_all(format!("{}\t{}\n", key, value).as_bytes())
             .expect("could not write count results!");
     }
 }
