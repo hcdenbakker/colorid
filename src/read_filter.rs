@@ -10,6 +10,7 @@ use std::io::prelude::*;
 pub fn tab_to_map(
     filename: String,
     query: &str,
+    accept: &str,
 ) -> std::collections::HashMap<std::string::String, String> {
     let mut map = HashMap::new();
     let f = File::open(filename).expect("classification file not found");
@@ -17,7 +18,7 @@ pub fn tab_to_map(
         let l = line.unwrap();
         let v: Vec<&str> = l.split('\t').collect();
         let h: Vec<&str> = v[0].split(' ').collect();
-        if v[1].contains(query) {
+        if v[1].contains(query) && (v[4] == accept){
             map.insert(String::from(h[0]), String::from(v[1]));
         }
     }

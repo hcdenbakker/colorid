@@ -729,7 +729,7 @@ fn main() {
         let taxon = matches.value_of("taxon").unwrap();
         let prefix = matches.value_of("prefix").unwrap();
         let exclude = matches.is_present("exclude");
-        let map = colorid::read_filter::tab_to_map(classification.to_string(), taxon);
+        let map = colorid::read_filter::tab_to_map(classification.to_string(), taxon, "accept");
         if files.len() == 1 {
             colorid::read_filter::read_filter_se(map, files, taxon, prefix, exclude);
         } else {
