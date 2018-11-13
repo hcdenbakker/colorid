@@ -191,7 +191,7 @@ OPTIONS:
 Here is an example:
 ```./target/release/colorid read_filter -c PREFIX_reads.txt -f your_reads_forward.fastq.gz your_reads_reverse.fastq.gz -p your_reads -t Dorea```
 
-This will generate a set of paired-end files(`your_reads_Dorea_1.fq.gz, your_reads_Dorea_2.fq.gz`) containing reads with a classification containing `Dorea`. If the `-e` flag is added, the files will consist of all reads, except those that contain `Dorea` in the classification. The current version of the read_filter command does not take into account if a result has been statistically accepted or rejected, this option will be added in the near future. 
+This will generate a set of paired-end files(`your_reads_Dorea_1.fq.gz, your_reads_Dorea_2.fq.gz`) containing reads with a classification containing `Dorea`. If the `-e` flag is added, the files will consist of all reads, except those that contain `Dorea` in the classification. The current version of the read_filter command does only work with 'accepted' read(-pairs). 
 
 
 ## Acknowledgements
