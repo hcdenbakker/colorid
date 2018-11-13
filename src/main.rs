@@ -15,7 +15,7 @@ static GLOBAL: System = System;
 
 fn main() {
     let matches = App::new("colorid")
-        .version("0.1.2")
+        .version("0.1.2.1")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .setting(AppSettings::ArgRequiredElseHelp)
