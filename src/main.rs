@@ -7,7 +7,6 @@ use colorid::bigsi;
 use colorid::build;
 use colorid::read_id_mt_pe::false_prob;
 use std::alloc::System;
-use std::fs;
 use std::time::SystemTime;
 
 #[global_allocator]
@@ -104,6 +103,14 @@ fn main() {
                         .short("Q")
                         .takes_value(true)
                         .long("quality"),
+                )
+                .arg(
+                    Arg::with_name("filter")
+                        .help("minimum coverage kmer threshold (default automatically detected)")
+                        .required(false)
+                        .short("f")
+                        .takes_value(true)
+                        .long("filter"),
                         ),
         )
         .subcommand(
@@ -367,12 +374,30 @@ fn main() {
         //hack to work around current clap bug with default values only being &str
         let minimizer_value: usize = matches.value_of("value").unwrap().parse::<usize>().unwrap();
         let map = build::tab_to_map(matches.value_of("ref_file").unwrap().to_string());
+        let filter = value_t!(matches, "filter", isize).unwrap_or(-1);
         if minimizer {
             println!("Build with minimizers, minimizer size: {}", minimizer_value);
             let (bigsi_map, colors_accession, n_ref_kmers) = if threads == 1 {
-                build::build_single_mini(&map, bloom, hashes, kmer, minimizer_value)
+                build::build_single_mini(
+                    &map,
+                    bloom,
+                    hashes,
+                    kmer,
+                    minimizer_value,
+                    quality,
+                    filter,
+                )
             } else {
-                build::build_multi_mini(&map, bloom, hashes, kmer, minimizer_value, threads)
+                build::build_multi_mini(
+                    &map,
+                    bloom,
+                    hashes,
+                    kmer,
+                    minimizer_value,
+                    threads,
+                    quality,
+                    filter,
+                )
             };
             println!("Saving BIGSI to file.");
             let index = bigsi::BigsyMapMiniNew {
@@ -401,9 +426,9 @@ fn main() {
             );*/
         } else {
             let (bigsi_map, colors_accession, n_ref_kmers) = if threads == 1 {
-                build::build_single(&map, bloom, hashes, kmer)
+                build::build_single(&map, bloom, hashes, kmer, quality, filter)
             } else {
-                build::build_multi(&map, bloom, hashes, kmer, threads)
+                build::build_multi(&map, bloom, hashes, kmer, threads, quality, filter)
             };
             let index = bigsi::BigsyMapNew {
                 map: bigsi_map,
