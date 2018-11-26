@@ -36,6 +36,8 @@ pub fn build_single(
     bloom_size: usize,
     num_hash: usize,
     k_size: usize,
+    quality: u8,
+    cutoff: isize,
 ) -> (
     //std::collections::HashMap<usize, bit_vec::BitVec>,
     fnv::FnvHashMap<usize, BitVec>,
@@ -52,9 +54,14 @@ pub fn build_single(
         eprintln!("Adding {} to index ({}/{})", accession, counter, map_length);
         counter += 1;
         if v.len() == 2 {
-            let unfiltered = kmer::kmers_fq_pe_qual(vec![&v[0], &v[1]], k_size, 1, 15);
-            let cutoff = kmer::auto_cutoff(unfiltered.to_owned());
-            let kmers = kmer::clean_map(unfiltered, cutoff);
+            let unfiltered = kmer::kmers_fq_pe_qual(vec![&v[0], &v[1]], k_size, 1, quality);
+            let kmers = if cutoff == -1 {
+                let auto_cutoff = kmer::auto_cutoff(unfiltered.to_owned());
+                kmer::clean_map(unfiltered, auto_cutoff)
+            } else {
+                kmer::clean_map(unfiltered, cutoff as usize)
+            };
+            ref_kmer.insert(accession.to_string(), kmers.len());
             let mut filter = simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
             for kmer in kmers.keys() {
                 filter.insert(&kmer);
@@ -62,8 +69,14 @@ pub fn build_single(
             bit_map.insert(accession, filter.bits);
         } else {
             if v[0].ends_with("gz") {
-                let unfiltered = kmer::kmers_from_fq_qual(v[0].to_owned(), k_size, 1, 15);
-                let kmers = kmer::clean_map(unfiltered, 1);
+                let unfiltered = kmer::kmers_from_fq_qual(v[0].to_owned(), k_size, 1, quality);
+                let kmers = if cutoff == -1 {
+                    let auto_cutoff = kmer::auto_cutoff(unfiltered.to_owned());
+                    kmer::clean_map(unfiltered, auto_cutoff)
+                } else {
+                    kmer::clean_map(unfiltered, cutoff as usize)
+                };
+                ref_kmer.insert(accession.to_string(), kmers.len());
                 let mut filter =
                     simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
                 for kmer in kmers.keys() {
@@ -72,7 +85,12 @@ pub fn build_single(
                 bit_map.insert(accession, filter.bits);
             } else {
                 let vec = kmer::read_fasta(v[0].to_string());
-                let kmers = kmer::kmerize_vector(vec, k_size, 1);
+                let kmers = if cutoff == -1 {
+                    kmer::kmerize_vector(vec, k_size, 1)
+                } else {
+                    let unfiltered = kmer::kmerize_vector(vec, k_size, 1);
+                    kmer::clean_map(unfiltered, cutoff as usize)
+                };
                 ref_kmer.insert(accession.to_string(), kmers.len());
                 let mut filter =
                     simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
@@ -119,6 +137,8 @@ pub fn build_multi(
     num_hash: usize,
     k_size: usize,
     t: usize,
+    quality: u8,
+    cutoff: isize,
 ) -> (
     //std::collections::HashMap<usize, bit_vec::BitVec>,
     fnv::FnvHashMap<usize, BitVec>,
@@ -147,9 +167,13 @@ pub fn build_multi(
         .par_iter()
         .map(|l| {
             if l.1.len() == 2 {
-                let unfiltered = kmer::kmers_fq_pe_qual(vec![&l.1[0], &l.1[1]], k_size, 1, 15);
-                let cutoff = kmer::auto_cutoff(unfiltered.to_owned());
-                let kmers = kmer::clean_map(unfiltered, cutoff);
+                let unfiltered = kmer::kmers_fq_pe_qual(vec![&l.1[0], &l.1[1]], k_size, 1, quality);
+                let kmers = if cutoff == -1 {
+                    let auto_cutoff = kmer::auto_cutoff(unfiltered.to_owned());
+                    kmer::clean_map(unfiltered, auto_cutoff)
+                } else {
+                    kmer::clean_map(unfiltered, cutoff as usize)
+                };
                 let mut filter =
                     simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
                 for kmer in kmers.keys() {
@@ -159,8 +183,12 @@ pub fn build_multi(
             } else {
                 if l.1[0].ends_with("gz") {
                     let unfiltered = kmer::kmers_from_fq_qual(l.1[0].to_owned(), k_size, 1, 15);
-                    let cutoff = kmer::auto_cutoff(unfiltered.to_owned());
-                    let kmers = kmer::clean_map(unfiltered, cutoff);
+                    let kmers = if cutoff == -1 {
+                        let auto_cutoff = kmer::auto_cutoff(unfiltered.to_owned());
+                        kmer::clean_map(unfiltered, auto_cutoff)
+                    } else {
+                        kmer::clean_map(unfiltered, cutoff as usize)
+                    };
                     let mut filter =
                         simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
                     for kmer in kmers.keys() {
@@ -169,7 +197,12 @@ pub fn build_multi(
                     (l.0, filter.bits, kmers.len())
                 } else {
                     let vec = kmer::read_fasta(l.1[0].to_string());
-                    let kmers = kmer::kmerize_vector(vec, k_size, 1);
+                    let kmers = if cutoff == -1 {
+                        kmer::kmerize_vector(vec, k_size, 1)
+                    } else {
+                        let unfiltered = kmer::kmerize_vector(vec, k_size, 1);
+                        kmer::clean_map(unfiltered, cutoff as usize)
+                    };
                     let mut filter =
                         simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
                     for kmer in kmers.keys() {
@@ -244,6 +277,8 @@ pub fn build_multi_mini(
     k_size: usize,
     m: usize,
     t: usize,
+    quality: u8,
+    cutoff: isize,
 ) -> (
     //std::collections::HashMap<usize, bit_vec::BitVec>,
     fnv::FnvHashMap<usize, BitVec>,
@@ -273,9 +308,13 @@ pub fn build_multi_mini(
         .map(|l| {
             if l.1.len() == 2 {
                 let unfiltered =
-                    kmer::kmers_fq_pe_minimizer_qual(vec![&l.1[0], &l.1[1]], k_size, m, 1, 15);
-                let cutoff = kmer::auto_cutoff(unfiltered.to_owned());
-                let kmers = kmer::clean_map(unfiltered, cutoff);
+                    kmer::kmers_fq_pe_minimizer_qual(vec![&l.1[0], &l.1[1]], k_size, m, 1, quality);
+                let kmers = if cutoff == -1 {
+                    let auto_cutoff = kmer::auto_cutoff(unfiltered.to_owned());
+                    kmer::clean_map(unfiltered, auto_cutoff)
+                } else {
+                    kmer::clean_map(unfiltered, cutoff as usize)
+                };
                 let mut filter =
                     simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
                 for kmer in kmers.keys() {
@@ -284,10 +323,19 @@ pub fn build_multi_mini(
                 (l.0, filter.bits, kmers.len())
             } else {
                 if l.1[0].ends_with("gz") {
-                    let unfiltered =
-                        kmer::kmers_from_fq_minimizer_qual(l.1[0].to_owned(), k_size, m, 1, 15);
-                    let cutoff = kmer::auto_cutoff(unfiltered.to_owned());
-                    let kmers = kmer::clean_map(unfiltered, cutoff);
+                    let unfiltered = kmer::kmers_from_fq_minimizer_qual(
+                        l.1[0].to_owned(),
+                        k_size,
+                        m,
+                        1,
+                        quality,
+                    );
+                    let kmers = if cutoff == -1 {
+                        let auto_cutoff = kmer::auto_cutoff(unfiltered.to_owned());
+                        kmer::clean_map(unfiltered, auto_cutoff)
+                    } else {
+                        kmer::clean_map(unfiltered, cutoff as usize)
+                    };
                     let mut filter =
                         simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
                     for kmer in kmers.keys() {
@@ -296,7 +344,12 @@ pub fn build_multi_mini(
                     (l.0, filter.bits, kmers.len())
                 } else {
                     let vec = kmer::read_fasta(l.1[0].to_string());
-                    let kmers = kmer::minimerize_vector_skip_n(vec, k_size, m, 1);
+                    let kmers = if cutoff == -1 {
+                        kmer::minimerize_vector_skip_n(vec, k_size, m, 1)
+                    } else {
+                        let unfiltered = kmer::minimerize_vector_skip_n(vec, k_size, m, 1);
+                        kmer::clean_map(unfiltered, cutoff as usize)
+                    };
                     let mut filter =
                         simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
                     for kmer in kmers.keys() {
@@ -369,6 +422,8 @@ pub fn build_single_mini(
     num_hash: usize,
     k_size: usize,
     m: usize,
+    quality: u8,
+    cutoff: isize,
 ) -> (
     //std::collections::HashMap<usize, bit_vec::BitVec>,
     fnv::FnvHashMap<usize, BitVec>,
@@ -385,9 +440,13 @@ pub fn build_single_mini(
         eprintln!("Adding {} to index ({}/{})", accession, counter, map_length);
         counter += 1;
         if v.len() == 2 {
-            let unfiltered = kmer::kmers_fq_pe_qual(vec![&v[0], &v[1]], k_size, 1, 15);
-            let cutoff = kmer::auto_cutoff(unfiltered.to_owned());
-            let kmers = kmer::clean_map(unfiltered, cutoff);
+            let unfiltered = kmer::kmers_fq_pe_qual(vec![&v[0], &v[1]], k_size, 1, quality);
+            let kmers = if cutoff == -1 {
+                let auto_cutoff = kmer::auto_cutoff(unfiltered.to_owned());
+                kmer::clean_map(unfiltered, auto_cutoff)
+            } else {
+                kmer::clean_map(unfiltered, cutoff as usize)
+            };
             let mut filter = simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
             for kmer in kmers.keys() {
                 filter.insert(&kmer::find_minimizer(&kmer, m));
@@ -395,8 +454,13 @@ pub fn build_single_mini(
             bit_map.insert(accession, filter.bits);
         } else {
             if v[0].ends_with("gz") {
-                let unfiltered = kmer::kmers_from_fq_qual(v[0].to_owned(), k_size, 1, 15);
-                let kmers = kmer::clean_map(unfiltered, 1);
+                let unfiltered = kmer::kmers_from_fq_qual(v[0].to_owned(), k_size, 1, quality);
+                let kmers = if cutoff == -1 {
+                    let auto_cutoff = kmer::auto_cutoff(unfiltered.to_owned());
+                    kmer::clean_map(unfiltered, auto_cutoff)
+                } else {
+                    kmer::clean_map(unfiltered, cutoff as usize)
+                };
                 let mut filter =
                     simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
                 for kmer in kmers.keys() {
@@ -405,7 +469,12 @@ pub fn build_single_mini(
                 bit_map.insert(accession, filter.bits);
             } else {
                 let vec = kmer::read_fasta(v[0].to_string());
-                let kmers = kmer::kmerize_vector(vec, k_size, 1);
+                let kmers = if cutoff == -1 {
+                    kmer::kmerize_vector(vec, k_size, 1)
+                } else {
+                    let unfiltered = kmer::kmerize_vector(vec, k_size, 1);
+                    kmer::clean_map(unfiltered, cutoff as usize)
+                };
                 ref_kmer.insert(accession.to_string(), kmers.len());
                 let mut filter =
                     simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);

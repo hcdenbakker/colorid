@@ -83,7 +83,7 @@ pub fn search_index(
 
 pub fn kmer_poll<'a>(
     report: &fnv::FnvHashMap<usize, usize>,
-    map: &fnv::FnvHashMap<std::string::String, usize>,
+    _map: &fnv::FnvHashMap<std::string::String, usize>,
     colors_accession: &'a fnv::FnvHashMap<usize, String>,
     child_fp: &fnv::FnvHashMap<usize, f64>,
     no_hits_num: usize,
@@ -92,7 +92,7 @@ pub fn kmer_poll<'a>(
     let mut count_vec: Vec<_> = report.iter().collect();
     count_vec.sort_by(|a, b| b.1.cmp(a.1));
     let mut observations = 0;
-    for (k, v) in report {
+    for (_k, v) in report {
         //if k == &no_hits_num {
         //    continue;
         //} else {
@@ -469,7 +469,7 @@ pub fn per_read_stream_pe(
     let my_bigsi: Arc<&fnv::FnvHashMap<usize, BitVec>> = Arc::new(bigsi_map);
     let false_positive_p_arc: Arc<fnv::FnvHashMap<usize, f64>> = Arc::new(false_positive_p);
     let mut read_count = 0;
-    let mut header = "".to_string();
+    let _header = "".to_string();
     let mut fastq = seq::Fastq::new();
     for line in iter1 {
         let l = line.unwrap();
@@ -554,8 +554,9 @@ pub fn per_read_stream_pe(
             read_count += c.len();
             eprint!("{} read pairs classified\r", read_count);
             for id in c {
-                file.write_all(format!("{}\t{}\t{}\t{}\t{}\n", id.0, id.1, id.2, id.3, id.4).as_bytes())
-                    .expect("could not write results!");
+                file.write_all(
+                    format!("{}\t{}\t{}\t{}\t{}\n", id.0, id.1, id.2, id.3, id.4).as_bytes(),
+                ).expect("could not write results!");
             }
             vec.clear();
         }
@@ -649,14 +650,14 @@ pub fn per_read_stream_se(
     let search_time = SystemTime::now();
     let mut vec = Vec::with_capacity(b);
     let mut line_count = 1;
-    let mut header = "".to_string();
-    let mut sequence = "".to_string();
+    let _header = "".to_string();
+    let _sequence = "".to_string();
     let no_hits_num: usize = colors_accession.len();
     let mut read_count = 0;
     let mut file =
         File::create(format!("{}_reads.txt", prefix)).expect("could not create outfile!");
     let batch = b * 4;
-    let num_files = filenames.len();
+    let _num_files = filenames.len();
     let f = File::open(&filenames[0]).expect("file not found");
     let d1 = MultiGzDecoder::new(f);
     let iter1 = io::BufReader::new(d1).lines();
@@ -745,8 +746,9 @@ pub fn per_read_stream_se(
             read_count += c.len();
             eprint!("{} read pairs classified\r", read_count);
             for id in c {
-                file.write_all(format!("{}\t{}\t{}\t{}\t{}\n", id.0, id.1, id.2, id.3, id.4).as_bytes())
-                    .expect("could not write results!");
+                file.write_all(
+                    format!("{}\t{}\t{}\t{}\t{}\n", id.0, id.1, id.2, id.3, id.4).as_bytes(),
+                ).expect("could not write results!");
             }
             vec.clear();
         }
