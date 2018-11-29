@@ -3,7 +3,6 @@ extern crate bit_vec;
 extern crate fasthash;
 extern crate flate2;
 extern crate fnv;
-extern crate murmurhash64;
 extern crate probability;
 extern crate rayon;
 extern crate serde;
