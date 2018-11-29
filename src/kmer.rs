@@ -317,22 +317,26 @@ pub fn kmers_from_fq_qual(
             let masked1 = seq::qual_mask(fastq.seq1.to_owned(), fastq.qual1, qual_offset);
             for l in vec![masked1] {
                 let length_l = l.len();
-                let l_r = revcomp(&l);
-                for i in 0..l.len() - k + 1 {
-                    if i % d == 0 {
-                        if seq::has_no_n(l[i..i + k].as_bytes()) {
-                            if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-                                let count = map.entry(l[i..i + k].to_string()).or_insert(0);
-                                *count += 1;
-                            } else {
-                                let count = map
-                                    .entry(l_r[length_l - (i + k)..length_l - i].to_string())
-                                    .or_insert(0);
-                                *count += 1;
+                if length_l < k {
+                    continue;
+                } else {
+                    let l_r = revcomp(&l);
+                    for i in 0..l.len() - k + 1 {
+                        if i % d == 0 {
+                            if seq::has_no_n(l[i..i + k].as_bytes()) {
+                                if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                                    let count = map.entry(l[i..i + k].to_string()).or_insert(0);
+                                    *count += 1;
+                                } else {
+                                    let count = map
+                                        .entry(l_r[length_l - (i + k)..length_l - i].to_string())
+                                        .or_insert(0);
+                                    *count += 1;
+                                }
                             }
                         }
                     }
-                }
+                } //here
             }
         }
         line_count += 1;
@@ -451,19 +455,25 @@ pub fn kmers_fq_pe_qual(
                     let masked2 = seq::qual_mask(fastq.seq2.to_owned(), fastq.qual2, qual_offset);
                     for l in vec![masked1, masked2] {
                         let length_l = l.len();
-                        let l_r = revcomp(&l);
-                        for i in 0..l.len() - k + 1 {
-                            if i % d == 0 {
-                                if seq::has_no_n(l[i..i + k].as_bytes()) {
-                                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-                                        let count = map.entry(l[i..i + k].to_string()).or_insert(0);
-                                        *count += 1;
-                                    } else {
-                                        let count = map
-                                            .entry(
-                                                l_r[length_l - (i + k)..length_l - i].to_string(),
-                                            ).or_insert(0);
-                                        *count += 1;
+                        if length_l < k {
+                            continue;
+                        } else {
+                            let l_r = revcomp(&l);
+                            for i in 0..l.len() - k + 1 {
+                                if i % d == 0 {
+                                    if seq::has_no_n(l[i..i + k].as_bytes()) {
+                                        if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                                            let count =
+                                                map.entry(l[i..i + k].to_string()).or_insert(0);
+                                            *count += 1;
+                                        } else {
+                                            let count = map
+                                                .entry(
+                                                    l_r[length_l - (i + k)..length_l - i]
+                                                        .to_string(),
+                                                ).or_insert(0);
+                                            *count += 1;
+                                        }
                                     }
                                 }
                             }
@@ -558,21 +568,26 @@ pub fn kmers_fq_pe_minimizer_qual(
                     let masked2 = seq::qual_mask(fastq.seq2.to_owned(), fastq.qual2, qual_offset);
                     for l in vec![masked1, masked2] {
                         let length_l = l.len();
-                        let l_r = revcomp(&l);
-                        for i in 0..l.len() - k + 1 {
-                            if i % d == 0 {
-                                if seq::has_no_n(l[i..i + k].as_bytes()) {
-                                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-                                        let count =
-                                            map.entry(find_minimizer(&l[i..i + k], m)).or_insert(0);
-                                        *count += 1;
-                                    } else {
-                                        let count = map
-                                            .entry(find_minimizer(
-                                                &l_r[length_l - (i + k)..length_l - i],
-                                                m,
-                                            )).or_insert(0);
-                                        *count += 1;
+                        if length_l < k {
+                            continue;
+                        } else {
+                            let l_r = revcomp(&l);
+                            for i in 0..l.len() - k + 1 {
+                                if i % d == 0 {
+                                    if seq::has_no_n(l[i..i + k].as_bytes()) {
+                                        if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                                            let count = map
+                                                .entry(find_minimizer(&l[i..i + k], m))
+                                                .or_insert(0);
+                                            *count += 1;
+                                        } else {
+                                            let count = map
+                                                .entry(find_minimizer(
+                                                    &l_r[length_l - (i + k)..length_l - i],
+                                                    m,
+                                                )).or_insert(0);
+                                            *count += 1;
+                                        }
                                     }
                                 }
                             }
@@ -612,20 +627,25 @@ pub fn kmers_from_fq_minimizer_qual(
             let masked1 = seq::qual_mask(fastq.seq1.to_owned(), fastq.qual1, qual_offset);
             for l in vec![masked1] {
                 let length_l = l.len();
-                let l_r = revcomp(&l);
-                for i in 0..l.len() - k + 1 {
-                    if i % d == 0 {
-                        if seq::has_no_n(l[i..i + k].as_bytes()) {
-                            if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-                                let count = map.entry(find_minimizer(&l[i..i + k], m)).or_insert(0);
-                                *count += 1;
-                            } else {
-                                let count = map
-                                    .entry(find_minimizer(
-                                        &l_r[length_l - (i + k)..length_l - i],
-                                        m,
-                                    )).or_insert(0);
-                                *count += 1;
+                if length_l < k {
+                    continue;
+                } else {
+                    let l_r = revcomp(&l);
+                    for i in 0..l.len() - k + 1 {
+                        if i % d == 0 {
+                            if seq::has_no_n(l[i..i + k].as_bytes()) {
+                                if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                                    let count =
+                                        map.entry(find_minimizer(&l[i..i + k], m)).or_insert(0);
+                                    *count += 1;
+                                } else {
+                                    let count = map
+                                        .entry(find_minimizer(
+                                            &l_r[length_l - (i + k)..length_l - i],
+                                            m,
+                                        )).or_insert(0);
+                                    *count += 1;
+                                }
                             }
                         }
                     }
