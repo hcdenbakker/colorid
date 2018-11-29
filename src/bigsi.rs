@@ -1,16 +1,10 @@
 use bincode::{deserialize, deserialize_from, serialize};
 use bit_vec::BitVec;
 use fnv;
-use std;
-use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
-use std::fs::OpenOptions;
-use std::io;
-use std::io::prelude::*;
 use std::io::BufReader;
 use std::io::Write;
-use std::path::Path;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct BigsyMap {

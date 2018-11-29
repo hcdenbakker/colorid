@@ -3,7 +3,6 @@ use fasthash;
 use fnv;
 use kmer;
 use reports;
-use std;
 use std::collections::HashMap;
 use std::time::SystemTime;
 
@@ -61,7 +60,7 @@ pub fn batch_search(
                     let mut first = kmer_slices[0].to_owned();
                     for i in 1..num_hash {
                         let j = i as usize;
-                        first.intersect(&kmer_slices[j]).to_owned();
+                        first.intersect(&kmer_slices[j]);
                     }
                     let mut hits = Vec::new();
                     for i in 0..first.len() {

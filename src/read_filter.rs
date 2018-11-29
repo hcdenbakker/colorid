@@ -25,6 +25,7 @@ pub fn tab_to_map(
     map
 }
 
+#[allow(unused_assignments)]
 pub fn read_filter_pe(
     class_map: std::collections::HashMap<std::string::String, String>,
     filenames: Vec<&str>,
@@ -81,20 +82,20 @@ pub fn read_filter_pe(
                         if !class_map.contains_key(v[0]) {
                             gz1.write_all(
                                 format!("{}\n{}\n+\n{}\n", header1, seq1, qual1).as_bytes(),
-                            );
+                            ).expect("could not write R1!");
                             gz2.write_all(
                                 format!("{}\n{}\n+\n{}\n", header2, seq2, qual2).as_bytes(),
-                            );
+                            ).expect("could not write R2!");
                             excluded += 1;
                         }
                     } else {
                         if class_map.contains_key(v[0]) {
                             gz1.write_all(
                                 format!("{}\n{}\n+\n{}\n", header1, seq1, qual1).as_bytes(),
-                            );
+                            ).expect("could not write R1!");
                             gz2.write_all(
                                 format!("{}\n{}\n+\n{}\n", header2, seq2, qual2).as_bytes(),
-                            );
+                            ).expect("could not write R2!");
                             included += 1;
                         }
                     }
@@ -104,8 +105,8 @@ pub fn read_filter_pe(
         }
         line_count += 1;
     }
-    gz1.finish();
-    gz2.finish();
+    gz1.finish().expect("Could not close new R1 file");
+    gz2.finish().expect("Could not close new R2 file");
     if exclude == true {
         eprintln!(
             "Excluded {} read pairs  with classification containing '{}' from output files",
@@ -120,6 +121,7 @@ pub fn read_filter_pe(
 }
 
 //quicker to adjust the function to se
+#[allow(unused_assignments)]
 pub fn read_filter_se(
     class_map: std::collections::HashMap<std::string::String, String>,
     filenames: Vec<&str>,
@@ -149,19 +151,21 @@ pub fn read_filter_se(
             let v: Vec<&str> = header1.split(' ').collect();
             if exclude == true {
                 if !class_map.contains_key(v[0]) {
-                    gz1.write_all(format!("{}\n{}\n+\n{}\n", header1, seq1, qual1).as_bytes());
+                    gz1.write_all(format!("{}\n{}\n+\n{}\n", header1, seq1, qual1).as_bytes())
+                        .expect("Could not write forward read(-s) to file");
                     excluded += 1;
                 }
             } else {
                 if class_map.contains_key(v[0]) {
-                    gz1.write_all(format!("{}\n{}\n+\n{}\n", header1, seq1, qual1).as_bytes());
+                    gz1.write_all(format!("{}\n{}\n+\n{}\n", header1, seq1, qual1).as_bytes())
+                        .expect("Could not write reverse read(-s) to file");
                     included += 1;
                 }
             }
         }
         line_count += 1;
     }
-    gz1.finish();
+    gz1.finish().expect("Could not close new read file");
     if exclude == true {
         eprintln!(
             "Excluded {} read pairs  with classification containing '{}' from output files",

@@ -3,8 +3,6 @@ use fasthash;
 use flate2::read::MultiGzDecoder;
 use fnv;
 use kmer;
-use kmer::minimerize_vector;
-use murmurhash64::murmur_hash64a;
 use probability::prelude::*;
 use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
@@ -254,6 +252,7 @@ impl Fasta {
     }
 }
 
+#[allow(unused_assignments)]
 pub fn stream_fasta(
     filenames: Vec<&str>,
     bigsi_map: &fnv::FnvHashMap<usize, BitVec>, //has to be an Arc ?
@@ -431,6 +430,7 @@ pub fn false_prob(m: f64, k: f64, n: f64) -> f64 {
     (1.0 - e.powf(-((k * (n + 0.5)) / (m - 1.0)))).powf(k)
 }
 
+#[allow(unused_assignments)]
 pub fn per_read_stream_pe(
     filenames: Vec<&str>,
     bigsi_map: &fnv::FnvHashMap<usize, BitVec>, //has to be an Arc
@@ -630,6 +630,7 @@ pub fn per_read_stream_pe(
     }
 }
 
+#[allow(unused_assignments)]
 pub fn per_read_stream_se(
     filenames: Vec<&str>,
     bigsi_map: &fnv::FnvHashMap<usize, BitVec>, //has to be an Arc ?

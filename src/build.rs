@@ -11,7 +11,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use std::sync::Arc;
 
 pub fn tab_to_map(filename: String) -> fnv::FnvHashMap<std::string::String, Vec<String>> {
     let mut map = fnv::FnvHashMap::default();

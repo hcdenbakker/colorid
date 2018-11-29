@@ -2,8 +2,6 @@ use bit_vec::BitVec;
 use fasthash;
 use fnv;
 use kmer;
-use std;
-use std::collections::HashMap;
 
 pub fn batch_search(
     files: Vec<&str>,
