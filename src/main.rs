@@ -14,7 +14,7 @@ static GLOBAL: System = System;
 
 fn main() {
     let matches = App::new("colorid")
-        .version("0.1.3")
+        .version("0.1.3.1")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .setting(AppSettings::ArgRequiredElseHelp)
@@ -31,14 +31,14 @@ fn main() {
                         .required(true)
                         .takes_value(true),
                 )
-                .help(
+                /*.help(
                               "                              -b, --bigsi=[FILE] 'Sets the prefix of the index file'
                               -r, --refs      'two column tab delimited file, first column taxon name, second column file  with sequence data plus path'
                               -k, --kmer      'sets kmer size to use for index'
                               -n, --num_hashes  'number of hashes to use for bloom filters'
                               -s, --bloom     'size bloom filter'
                               -m, --minimizer 'build index from minimizers'
-                              -t, --threads 'sets number of threads, if set to 0, takes as many threads as it can get, default 1'")
+                              -t, --threads 'sets number of threads, if set to 0, takes as many threads as it can get, default 1'")*/
                 .arg(
                     Arg::with_name("ref_file")
                         .help("Sets the input file to use")
