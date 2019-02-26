@@ -18,7 +18,9 @@ pub fn tab_to_map(
         let l = line.unwrap();
         let v: Vec<&str> = l.split('\t').collect();
         let h: Vec<&str> = v[0].split(' ').collect();
-        if v[1].contains(query) && (v[4] == accept) {
+        if v[1].contains(query)
+        /* && (v[4] == accept)*/
+        {
             map.insert(String::from(h[0]), String::from(v[1]));
         }
     }
@@ -33,6 +35,7 @@ pub fn read_filter_pe(
     prefix: &str,
     exclude: bool,
 ) {
+    let query_cleaned = query.replace(" ", "_");
     let mut line_count = 1;
     let f = File::open(&filenames[0]).expect("file not found");
     let f2 = File::open(&filenames[1]).expect("file not found");
@@ -48,9 +51,11 @@ pub fn read_filter_pe(
     let mut qual2 = "".to_string();
     let mut excluded = 0;
     let mut included = 0;
-    let fq1 = File::create(format!("{}_{}_R1.fq.gz", prefix, query)).expect("could not create R1!");
+    let fq1 = File::create(format!("{}_{}_R1.fq.gz", prefix, query_cleaned))
+        .expect("could not create R1!");
     let mut gz1 = GzEncoder::new(fq1, Compression::default());
-    let fq2 = File::create(format!("{}_{}_R2.fq.gz", prefix, query)).expect("could not create R2!");
+    let fq2 = File::create(format!("{}_{}_R2.fq.gz", prefix, query_cleaned))
+        .expect("could not create R2!");
     let mut gz2 = GzEncoder::new(fq2, Compression::default());
     for line in iter1 {
         let l = line.unwrap();
@@ -82,20 +87,24 @@ pub fn read_filter_pe(
                         if !class_map.contains_key(v[0]) {
                             gz1.write_all(
                                 format!("{}\n{}\n+\n{}\n", header1, seq1, qual1).as_bytes(),
-                            ).expect("could not write R1!");
+                            )
+                            .expect("could not write R1!");
                             gz2.write_all(
                                 format!("{}\n{}\n+\n{}\n", header2, seq2, qual2).as_bytes(),
-                            ).expect("could not write R2!");
+                            )
+                            .expect("could not write R2!");
                             excluded += 1;
                         }
                     } else {
                         if class_map.contains_key(v[0]) {
                             gz1.write_all(
                                 format!("{}\n{}\n+\n{}\n", header1, seq1, qual1).as_bytes(),
-                            ).expect("could not write R1!");
+                            )
+                            .expect("could not write R1!");
                             gz2.write_all(
                                 format!("{}\n{}\n+\n{}\n", header2, seq2, qual2).as_bytes(),
-                            ).expect("could not write R2!");
+                            )
+                            .expect("could not write R2!");
                             included += 1;
                         }
                     }
@@ -129,6 +138,7 @@ pub fn read_filter_se(
     prefix: &str,
     exclude: bool,
 ) {
+    let query_cleaned = query.replace(" ", "_");
     let mut line_count = 1;
     let f = File::open(&filenames[0]).expect("file not found");
     let d1 = MultiGzDecoder::new(f);
@@ -138,7 +148,8 @@ pub fn read_filter_se(
     let mut qual1 = "".to_string();
     let mut excluded = 0;
     let mut included = 0;
-    let fq1 = File::create(format!("{}_{}.fq.gz", prefix, query)).expect("could not create R1!");
+    let fq1 =
+        File::create(format!("{}_{}.fq.gz", prefix, query_cleaned)).expect("could not create R1!");
     let mut gz1 = GzEncoder::new(fq1, Compression::default());
     for line in iter1 {
         let l = line.unwrap();

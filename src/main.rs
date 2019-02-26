@@ -12,9 +12,9 @@ use std::time::SystemTime;
 #[global_allocator]
 static GLOBAL: System = System;
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let matches = App::new("colorid")
-        .version("0.1.3.1")
+        .version("0.1.4.0")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .setting(AppSettings::ArgRequiredElseHelp)
@@ -305,6 +305,14 @@ fn main() {
                         .short("Q")
                         .takes_value(true)
                         .long("quality"),
+                )
+                .arg(
+                    Arg::with_name("bitvector_sample")
+                        .help("Collects matches for subset of kmers indicated (default=3), using this subset to more rapidly find hits for the remainder of the kmers")
+                        .required(false)
+                        .short("B")
+                        .takes_value(true)
+                        .long("bitvector_sample"),
                         ),
         )
         .subcommand(
@@ -414,16 +422,16 @@ fn main() {
                 &index,
             );
         /*
-            bigsi::save_bigsi_mini(
-                bigsi_map.to_owned(),
-                colors_accession.to_owned(),
-                n_ref_kmers.to_owned(),
-                bloom,
-                hashes,
-                kmer,
-                minimizer_value,
-                &(matches.value_of("bigsi").unwrap().to_owned() + ".mxi"),
-            );*/
+        bigsi::save_bigsi_mini(
+            bigsi_map.to_owned(),
+            colors_accession.to_owned(),
+            n_ref_kmers.to_owned(),
+            bloom,
+            hashes,
+            kmer,
+            minimizer_value,
+            &(matches.value_of("bigsi").unwrap().to_owned() + ".mxi"),
+        );*/
         } else {
             let (bigsi_map, colors_accession, n_ref_kmers) = if threads == 1 {
                 build::build_single(&map, bloom, hashes, kmer, quality, filter)
@@ -607,6 +615,7 @@ fn main() {
         let quality = value_t!(matches, "quality", u8).unwrap_or(15);
         let batch = value_t!(matches, "batch", usize).unwrap_or(50000);
         let high_mem_load = matches.is_present("high_mem_load");
+        let bitvector_sample = value_t!(matches, "bitvector_sample", usize).unwrap_or(3);
 
         if index.ends_with(".mxi") {
             //let metadata = fs::metadata(&index).expect("Can't read metadata index!");
@@ -641,6 +650,7 @@ fn main() {
                         batch,
                         prefix,
                         quality,
+                        bitvector_sample,
                     )
                 } else {
                     colorid::read_id_mt_pe::per_read_stream_se(
@@ -658,6 +668,7 @@ fn main() {
                         batch,
                         prefix,
                         quality,
+                        bitvector_sample,
                     )
                 };
             } else {
@@ -675,6 +686,7 @@ fn main() {
                     fp_correct,
                     batch,
                     prefix,
+                    bitvector_sample,
                 );
             }
         } else {
@@ -709,6 +721,7 @@ fn main() {
                         batch,
                         prefix,
                         quality,
+                        bitvector_sample,
                     )
                 } else {
                     colorid::read_id_mt_pe::per_read_stream_se(
@@ -726,6 +739,7 @@ fn main() {
                         batch,
                         prefix,
                         quality,
+                        bitvector_sample,
                     )
                 };
             } else {
@@ -743,6 +757,7 @@ fn main() {
                     fp_correct,
                     batch,
                     prefix,
+                    bitvector_sample,
                 );
             }
         }
@@ -761,4 +776,5 @@ fn main() {
             colorid::read_filter::read_filter_pe(map, files, taxon, prefix, exclude);
         }
     }
+    Ok(())
 }

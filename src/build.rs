@@ -38,7 +38,6 @@ pub fn build_single(
     quality: u8,
     cutoff: isize,
 ) -> (
-    //std::collections::HashMap<usize, bit_vec::BitVec>,
     fnv::FnvHashMap<usize, BitVec>,
     fnv::FnvHashMap<usize, String>,
     fnv::FnvHashMap<String, usize>,
@@ -139,7 +138,6 @@ pub fn build_multi(
     quality: u8,
     cutoff: isize,
 ) -> (
-    //std::collections::HashMap<usize, bit_vec::BitVec>,
     fnv::FnvHashMap<usize, BitVec>,
     fnv::FnvHashMap<usize, String>,
     fnv::FnvHashMap<String, usize>,
@@ -150,13 +148,17 @@ pub fn build_multi(
         .build_global()
         .unwrap();
     let map_length = map.len();
-    let mut bit_map = HashMap::with_capacity(map_length);
     let mut ref_kmer = fnv::FnvHashMap::default();
     let mut accessions = Vec::with_capacity(map_length);
     let mut map_vec = Vec::with_capacity(map_length);
     for (accession, v) in map {
         map_vec.push((accession, v));
     }
+    let mut colors_accession = fnv::FnvHashMap::default();
+    let mut accession_colors = fnv::FnvHashMap::default();
+    let bloom_vec: Vec<usize> = (0..bloom_size).collect();
+    let d: Vec<_>;
+    {
     let c: Vec<_>;
     eprintln!(
         "Inference of Bloom filters in parallel using {} threads.",
@@ -210,9 +212,9 @@ pub fn build_multi(
                     (l.0, filter.bits, kmers.len())
                 }
             }
-        }).collect();
-    for t in c {
-        bit_map.insert(t.0, t.1);
+        })
+        .collect();
+    for t in &c {
         ref_kmer.insert(t.0.to_string(), t.2);
     }
     for accession in map.keys() {
@@ -221,30 +223,27 @@ pub fn build_multi(
     accessions.sort();
     //create hash table with colors for accessions
     let num_taxa = accessions.len();
-    let mut accession_colors = fnv::FnvHashMap::default();
-    let mut colors_accession = fnv::FnvHashMap::default();
     for (c, s) in accessions.iter().enumerate() {
         accession_colors.insert(s.to_string(), c);
         colors_accession.insert(c, s.to_string());
     }
     eprintln!("Creation of index, this may take a while!");
     //create actual index, the most straight forward way, but not very efficient
-    //let my_bitmap: Arc<std::collections::HashMap<&std::string::String, bit_vec::BitVec>> = Arc::new(bit_map);
-    let mut bigsi_map = fnv::FnvHashMap::default();
-    let bloom_vec: Vec<usize> = (0..bloom_size).collect();
-    let d: Vec<_>;
     d = bloom_vec
         .par_iter()
         .map(|i| {
-            //let child_bitmap = my_bitmap.clone();
             let mut bitvec = BitVec::from_elem(num_taxa, false);
-            for (t, s) in &bit_map {
-                if s[*i] {
-                    bitvec.set(accession_colors[&t.to_string()], true);
+            for a in &c {
+                if a.1[*i] {
+                    bitvec.set(accession_colors[&a.0.to_string()], true);
                 }
             }
             (i, bitvec)
-        }).collect();
+        })
+        .collect();
+    drop(c);
+    }
+    let mut bigsi_map = fnv::FnvHashMap::default();
     for t in d {
         if t.1.none() {
             continue;
@@ -252,20 +251,6 @@ pub fn build_multi(
             bigsi_map.insert(t.0.to_owned(), t.1);
         }
     }
-    /*
-    for i in 0..bloom_size {
-        let mut bitvec = BitVec::from_elem(num_taxa, false);
-        for (t, s) in &bit_map {
-            if s[i] {
-                bitvec.set(accession_colors[&t.to_string()], true);
-            }
-        }
-        if bitvec.none() {
-            continue;
-        } else {
-            bigsi_map.insert(i, bitvec.to_bytes());
-        }
-    }*/
     (bigsi_map, colors_accession, ref_kmer)
 }
 
@@ -279,7 +264,6 @@ pub fn build_multi_mini(
     quality: u8,
     cutoff: isize,
 ) -> (
-    //std::collections::HashMap<usize, bit_vec::BitVec>,
     fnv::FnvHashMap<usize, BitVec>,
     fnv::FnvHashMap<usize, String>,
     fnv::FnvHashMap<String, usize>,
@@ -290,13 +274,17 @@ pub fn build_multi_mini(
         .build_global()
         .unwrap();
     let map_length = map.len();
-    let mut bit_map = HashMap::with_capacity(map_length);
     let mut ref_kmer = fnv::FnvHashMap::default();
     let mut accessions = Vec::with_capacity(map_length);
     let mut map_vec = Vec::with_capacity(map_length);
     for (accession, v) in map {
         map_vec.push((accession, v));
     }
+    let mut colors_accession = fnv::FnvHashMap::default();
+    let mut accession_colors = fnv::FnvHashMap::default();
+    let bloom_vec: Vec<usize> = (0..bloom_size).collect();
+    let d: Vec<_>;
+    {
     let c: Vec<_>;
     eprintln!(
         "Inference of Bloom filters in parallel using {} threads.",
@@ -344,9 +332,9 @@ pub fn build_multi_mini(
                 } else {
                     let vec = kmer::read_fasta(l.1[0].to_string());
                     let kmers = if cutoff == -1 {
-                        kmer::minimerize_vector_skip_n(vec, k_size, m, 1)
+                        kmer::minimerize_vector_skip_n(&vec, k_size, m, 1)
                     } else {
-                        let unfiltered = kmer::minimerize_vector_skip_n(vec, k_size, m, 1);
+                        let unfiltered = kmer::minimerize_vector_skip_n(&vec, k_size, m, 1);
                         kmer::clean_map(unfiltered, cutoff as usize)
                     };
                     let mut filter =
@@ -357,9 +345,9 @@ pub fn build_multi_mini(
                     (l.0, filter.bits, kmers.len())
                 }
             }
-        }).collect();
-    for t in c {
-        bit_map.insert(t.0, t.1);
+        })
+        .collect();
+    for t in &c {
         ref_kmer.insert(t.0.to_string(), t.2);
     }
     for accession in map.keys() {
@@ -368,29 +356,27 @@ pub fn build_multi_mini(
     accessions.sort();
     //create hash table with colors for accessions
     let num_taxa = accessions.len();
-    let mut accession_colors = fnv::FnvHashMap::default();
-    let mut colors_accession = fnv::FnvHashMap::default();
     for (c, s) in accessions.iter().enumerate() {
         accession_colors.insert(s.to_string(), c);
         colors_accession.insert(c, s.to_string());
     }
     eprintln!("Creation of index, this may take a while!");
     //create actual index, the most straight forward way, but not very efficient
-    let mut bigsi_map = fnv::FnvHashMap::default();
     //this can be done in parallel!
-    let bloom_vec: Vec<usize> = (0..bloom_size).collect();
-    let d: Vec<_>;
     d = bloom_vec
         .par_iter()
         .map(|i| {
             let mut bitvec = BitVec::from_elem(num_taxa, false);
-            for (t, s) in &bit_map {
-                if s[*i] {
-                    bitvec.set(accession_colors[&t.to_string()], true);
+            for a in &c {
+                if a.1[*i] {
+                    bitvec.set(accession_colors[&a.0.to_string()], true);
                 }
             }
             (i, bitvec)
-        }).collect();
+        })
+        .collect();
+        }
+    let mut bigsi_map = fnv::FnvHashMap::default();
     for t in d {
         if t.1.none() {
             continue;
@@ -398,20 +384,6 @@ pub fn build_multi_mini(
             bigsi_map.insert(t.0.to_owned(), t.1);
         }
     }
-    /*
-    for i in 0..bloom_size {
-        let mut bitvec = BitVec::from_elem(num_taxa, false);
-        for (t, s) in &bit_map {
-            if s[i] {
-                bitvec.set(accession_colors[&t.to_string()], true);
-            }
-        }
-        if bitvec.none() {
-            continue;
-        } else {
-            bigsi_map.insert(i, bitvec.to_bytes());
-        }
-    }*/
     (bigsi_map, colors_accession, ref_kmer)
 }
 
@@ -424,7 +396,6 @@ pub fn build_single_mini(
     quality: u8,
     cutoff: isize,
 ) -> (
-    //std::collections::HashMap<usize, bit_vec::BitVec>,
     fnv::FnvHashMap<usize, BitVec>,
     fnv::FnvHashMap<usize, String>,
     fnv::FnvHashMap<String, usize>,

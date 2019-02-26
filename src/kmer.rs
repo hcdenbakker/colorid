@@ -83,6 +83,7 @@ pub fn read_fasta_mf(filename: String) -> (Vec<String>, Vec<String>) {
     (labels, vec)
 }
 
+#[inline]
 pub fn kmerize_vector(
     v: Vec<String>,
     k: usize,
@@ -90,13 +91,15 @@ pub fn kmerize_vector(
 ) -> fnv::FnvHashMap<std::string::String, usize> {
     let mut map = fnv::FnvHashMap::default();
     for l in v {
-        let length_l = l.len();
-        if length_l < k {
+        if l.len() < k {
             continue;
         } else {
-            let l_r = revcomp(&l);
-            for i in 0..l.len() - k + 1 {
-                if i % d == 0 {
+            let length_l = l.len();
+            if length_l < k {
+                continue;
+            } else {
+                let l_r = revcomp(&l);
+                for i in (0..l.len() - k + 1).step_by(d) {
                     if seq::has_no_n(l[i..i + k].as_bytes()) {
                         if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
                             let count = map
@@ -109,7 +112,8 @@ pub fn kmerize_vector(
                                     l_r[length_l - (i + k)..length_l - i]
                                         .to_string()
                                         .to_uppercase(),
-                                ).or_insert(0);
+                                )
+                                .or_insert(0);
                             *count += 1;
                         }
                     }
@@ -120,6 +124,7 @@ pub fn kmerize_vector(
     map
 }
 
+#[inline]
 pub fn kmerize_vector_uppercase(
     v: Vec<String>,
     k: usize,
@@ -129,8 +134,36 @@ pub fn kmerize_vector_uppercase(
     for l in v {
         let length_l = l.len();
         let l_r = revcomp(&l);
-        for i in 0..l.len() - k + 1 {
-            if i % d == 0 {
+        for i in (0..l.len() - k + 1).step_by(d) {
+            //if i % d == 0 {
+            if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                let count = map.entry(l[i..i + k].to_string()).or_insert(0);
+                *count += 1;
+            } else {
+                let count = map
+                    .entry(l_r[length_l - (i + k)..length_l - i].to_string())
+                    .or_insert(0);
+                *count += 1;
+            }
+            //}
+        }
+    }
+    map
+}
+
+#[inline]
+pub fn kmerize_vector_skip_n(
+    v: &Vec<String>,
+    k: usize,
+    d: usize,
+) -> fnv::FnvHashMap<std::string::String, usize> {
+    let mut map = fnv::FnvHashMap::default();
+    for l in v {
+        let length_l = l.len();
+        let l_r = revcomp(&l);
+        for i in (0..l.len() - k + 1).step_by(d) {
+            //if i % d == 0 {
+            if seq::has_no_n(l[i..i + k].as_bytes()) {
                 if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
                     let count = map.entry(l[i..i + k].to_string()).or_insert(0);
                     *count += 1;
@@ -140,63 +173,44 @@ pub fn kmerize_vector_uppercase(
                         .or_insert(0);
                     *count += 1;
                 }
+            } else {
+                continue;
             }
+            //}
         }
     }
     map
 }
 
-pub fn kmerize_vector_skip_n(
-    v: Vec<String>,
-    k: usize,
-    d: usize,
-) -> fnv::FnvHashMap<std::string::String, usize> {
-    let mut map = fnv::FnvHashMap::default();
-    for l in v {
-        let length_l = l.len();
-        let l_r = revcomp(&l);
-        for i in 0..l.len() - k + 1 {
-            if i % d == 0 {
-                if seq::has_no_n(l[i..i + k].as_bytes()) {
-                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-                        let count = map.entry(l[i..i + k].to_string()).or_insert(0);
-                        *count += 1;
-                    } else {
-                        let count = map
-                            .entry(l_r[length_l - (i + k)..length_l - i].to_string())
-                            .or_insert(0);
-                        *count += 1;
-                    }
-                } else {
-                    continue;
-                }
-            }
-        }
-    }
-    map
-}
-
-pub fn kmerize_string(l: String, k: usize) -> fnv::FnvHashMap<std::string::String, usize> {
+#[inline]
+pub fn kmerize_string(l: String, k: usize) -> Option<fnv::FnvHashMap<std::string::String, usize>> {
     let mut map = fnv::FnvHashMap::default();
     let length_l = l.len();
     let l_r = revcomp(&l);
-    for i in 0..l.len() - k + 1 {
-        if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-            let count = map
-                .entry(l[i..i + k].to_string().to_uppercase())
-                .or_insert(0);
-            *count += 1;
-        } else {
-            let count = map
-                .entry(
-                    l_r[length_l - (i + k)..length_l - i]
-                        .to_string()
-                        .to_uppercase(),
-                ).or_insert(0);
-            *count += 1;
-        }
+    if length_l < k {
+        None
+    } else {
+        Some({
+            for i in 0..l.len() - k + 1 {
+                if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                    let count = map
+                        .entry(l[i..i + k].to_string().to_uppercase())
+                        .or_insert(0);
+                    *count += 1;
+                } else {
+                    let count = map
+                        .entry(
+                            l_r[length_l - (i + k)..length_l - i]
+                                .to_string()
+                                .to_uppercase(),
+                        )
+                        .or_insert(0);
+                    *count += 1;
+                }
+            }
+            map
+        })
     }
-    map
 }
 
 pub fn minimerize_vector(
@@ -209,25 +223,25 @@ pub fn minimerize_vector(
     for l in v {
         let length_l = l.len();
         let l_r = revcomp(&l);
-        for i in 0..l.len() - k + 1 {
-            if i % d == 0 {
-                if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-                    let min = find_minimizer(&l[i..i + k], m);
-                    let count = map.entry(min).or_insert(0);
-                    *count += 1;
-                } else {
-                    let min = find_minimizer(&l_r[length_l - (i + k)..length_l - i], m);
-                    let count = map.entry(min).or_insert(0);
-                    *count += 1;
-                }
+        for i in (0..l.len() - k + 1).step_by(d) {
+            //if i % d == 0 {
+            if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                let min = find_minimizer(&l[i..i + k], m);
+                let count = map.entry(min).or_insert(0);
+                *count += 1;
+            } else {
+                let min = find_minimizer(&l_r[length_l - (i + k)..length_l - i], m);
+                let count = map.entry(min).or_insert(0);
+                *count += 1;
             }
+            //}
         }
     }
     map
 }
 
 pub fn minimerize_vector_skip_n(
-    v: Vec<String>,
+    v: &Vec<String>,
     k: usize,
     m: usize,
     d: usize,
@@ -239,22 +253,22 @@ pub fn minimerize_vector_skip_n(
             continue;
         } else {
             let l_r = revcomp(&l);
-            for i in 0..l.len() - k + 1 {
-                if i % d == 0 {
-                    if seq::has_no_n(l[i..i + k].as_bytes()) {
-                        if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-                            let min = find_minimizer(&l[i..i + k], m);
-                            let count = map.entry(min.to_uppercase()).or_insert(0);
-                            *count += 1;
-                        } else {
-                            let min = find_minimizer(&l_r[length_l - (i + k)..length_l - i], m);
-                            let count = map.entry(min.to_uppercase()).or_insert(0);
-                            *count += 1;
-                        }
+            for i in (0..l.len() - k + 1).step_by(d) {
+                //if i % d == 0 {
+                if seq::has_no_n(l[i..i + k].as_bytes()) {
+                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                        let min = find_minimizer(&l[i..i + k], m);
+                        let count = map.entry(min.to_uppercase()).or_insert(0);
+                        *count += 1;
                     } else {
-                        continue;
+                        let min = find_minimizer(&l_r[length_l - (i + k)..length_l - i], m);
+                        let count = map.entry(min.to_uppercase()).or_insert(0);
+                        *count += 1;
                     }
+                } else {
+                    continue;
                 }
+                //}
             }
         }
     }
@@ -471,7 +485,8 @@ pub fn kmers_fq_pe_qual(
                                                 .entry(
                                                     l_r[length_l - (i + k)..length_l - i]
                                                         .to_string(),
-                                                ).or_insert(0);
+                                                )
+                                                .or_insert(0);
                                             *count += 1;
                                         }
                                     }
@@ -572,24 +587,24 @@ pub fn kmers_fq_pe_minimizer_qual(
                             continue;
                         } else {
                             let l_r = revcomp(&l);
-                            for i in 0..l.len() - k + 1 {
-                                if i % d == 0 {
-                                    if seq::has_no_n(l[i..i + k].as_bytes()) {
-                                        if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-                                            let count = map
-                                                .entry(find_minimizer(&l[i..i + k], m))
-                                                .or_insert(0);
-                                            *count += 1;
-                                        } else {
-                                            let count = map
-                                                .entry(find_minimizer(
-                                                    &l_r[length_l - (i + k)..length_l - i],
-                                                    m,
-                                                )).or_insert(0);
-                                            *count += 1;
-                                        }
+                            for i in (0..l.len() - k + 1).step_by(d) {
+                                //if i % d == 0 {
+                                if seq::has_no_n(l[i..i + k].as_bytes()) {
+                                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                                        let count =
+                                            map.entry(find_minimizer(&l[i..i + k], m)).or_insert(0);
+                                        *count += 1;
+                                    } else {
+                                        let count = map
+                                            .entry(find_minimizer(
+                                                &l_r[length_l - (i + k)..length_l - i],
+                                                m,
+                                            ))
+                                            .or_insert(0);
+                                        *count += 1;
                                     }
                                 }
+                                //}
                             }
                         }
                     }
@@ -615,7 +630,7 @@ pub fn kmers_from_fq_minimizer_qual(
     let mut map = fnv::FnvHashMap::default();
     let mut line_count = 1;
     let mut fastq = seq::Fastq::new();
-    let d = 1; //downsampler not used here so 1
+    //let d = 1; //downsampler not used here so 1
     for line in iter {
         let l = line.unwrap();
         if line_count % 4 == 1 {
@@ -632,22 +647,22 @@ pub fn kmers_from_fq_minimizer_qual(
                 } else {
                     let l_r = revcomp(&l);
                     for i in 0..l.len() - k + 1 {
-                        if i % d == 0 {
-                            if seq::has_no_n(l[i..i + k].as_bytes()) {
-                                if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
-                                    let count =
-                                        map.entry(find_minimizer(&l[i..i + k], m)).or_insert(0);
-                                    *count += 1;
-                                } else {
-                                    let count = map
-                                        .entry(find_minimizer(
-                                            &l_r[length_l - (i + k)..length_l - i],
-                                            m,
-                                        )).or_insert(0);
-                                    *count += 1;
-                                }
+                        //if i % d == 0 {
+                        if seq::has_no_n(l[i..i + k].as_bytes()) {
+                            if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                                let count = map.entry(find_minimizer(&l[i..i + k], m)).or_insert(0);
+                                *count += 1;
+                            } else {
+                                let count = map
+                                    .entry(find_minimizer(
+                                        &l_r[length_l - (i + k)..length_l - i],
+                                        m,
+                                    ))
+                                    .or_insert(0);
+                                *count += 1;
                             }
                         }
+                        //}
                     }
                 }
             }
@@ -762,7 +777,7 @@ pub fn find_minimizer(kmer: &str, m: usize) -> String {
     }
     minimizer
 }*/
-
+/*
 pub fn find_minimizer(kmer: &str, m: usize) -> String {
     let kmer_r = revcomp(&kmer);
     let length = kmer_r.len();
@@ -773,4 +788,22 @@ pub fn find_minimizer(kmer: &str, m: usize) -> String {
     }
     minimizers.sort();
     minimizers[0].to_string()
+}
+*/
+#[inline]
+pub fn find_minimizer(seq: &str, m: usize) -> String {
+    let r_seq = revcomp(&seq);
+    let length = seq.len();
+    let mut minmer = &seq[..m];
+    for i in 1..seq.len() - m + 1 {
+        let min_f = &seq[i..i + m];
+        let min_rc = &r_seq[length - (i + m)..length - i];
+        if min_f < minmer {
+            minmer = min_f;
+        }
+        if min_rc < minmer {
+            minmer = min_rc;
+        }
+    }
+    minmer.to_string()
 }

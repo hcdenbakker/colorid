@@ -1,6 +1,6 @@
 [package]
 name = "colorid"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["henk den bakker"]
 
 [dependencies]
@@ -17,3 +17,6 @@ probability = "0.15.11"
 rayon = "1.0.2"
 fnv = "1.0.6"
 systemstat = "0.1.3"
+
+[profile.release]
+lto = true
