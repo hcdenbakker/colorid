@@ -33,9 +33,9 @@ impl Fastq {
 }
 
 //from L. Katz fasten! make a method for Fastq
-pub fn qual_mask(seq: String, qual: String, max_quality_offset: u8) -> String {
+pub fn qual_mask(seq: &String, qual: &String, max_quality_offset: u8) -> String {
     if max_quality_offset == 0 {
-        seq
+        seq.to_string()
     } else {
         let max_quality: u8 = max_quality_offset + 33;
         let mut seq_chars = seq.chars();

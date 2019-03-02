@@ -85,7 +85,7 @@ pub fn read_fasta_mf(filename: String) -> (Vec<String>, Vec<String>) {
 
 #[inline]
 pub fn kmerize_vector(
-    v: Vec<String>,
+    v: &Vec<String>,
     k: usize,
     d: usize,
 ) -> fnv::FnvHashMap<std::string::String, usize> {
@@ -122,6 +122,41 @@ pub fn kmerize_vector(
         }
     }
     map
+}
+
+#[inline]
+pub fn kmerize_vector_set(
+    v: &Vec<String>,
+    k: usize,
+    d: usize,
+) -> fnv::FnvHashSet<std::string::String> {
+    let mut set = fnv::FnvHashSet::default();
+    for l in v {
+        if l.len() < k {
+            continue;
+        } else {
+            let length_l = l.len();
+            if length_l < k {
+                continue;
+            } else {
+                let l_r = revcomp(&l);
+                for i in (0..l.len() - k + 1).step_by(d) {
+                    if seq::has_no_n(l[i..i + k].as_bytes()) {
+                        if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                            set.insert(l[i..i + k].to_string().to_uppercase());
+                        } else {
+                            set.insert(
+                                l_r[length_l - (i + k)..length_l - i]
+                                    .to_string()
+                                    .to_uppercase(),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    set
 }
 
 #[inline]
@@ -177,6 +212,56 @@ pub fn kmerize_vector_skip_n(
                 continue;
             }
             //}
+        }
+    }
+    map
+}
+
+#[inline]
+pub fn kmerize_vector_skip_n_set(
+    v: &Vec<String>,
+    k: usize,
+    d: usize,
+) -> fnv::FnvHashSet<std::string::String> {
+    let mut map = fnv::FnvHashSet::default();
+    for l in v {
+        let length_l = l.len();
+        let l_r = revcomp(&l);
+        for i in (0..l.len() - k + 1).step_by(d) {
+            if seq::has_no_n(l[i..i + k].as_bytes()) {
+                if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                    map.insert(l[i..i + k].to_string());
+                } else {
+                    map.insert(l_r[length_l - (i + k)..length_l - i].to_string());
+                }
+            } else {
+                continue;
+            }
+        }
+    }
+    map
+}
+
+#[inline]
+pub fn kmerize_vector_skip_n_set_str(
+    v: &Vec<&str>,
+    k: usize,
+    d: usize,
+) -> fnv::FnvHashSet<std::string::String> {
+    let mut map = fnv::FnvHashSet::default();
+    for l in v {
+        let length_l = l.len();
+        let l_r = revcomp(&l);
+        for i in (0..l.len() - k + 1).step_by(d) {
+            if seq::has_no_n(l[i..i + k].as_bytes()) {
+                if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                    map.insert(l[i..i + k].to_string());
+                } else {
+                    map.insert(l_r[length_l - (i + k)..length_l - i].to_string());
+                }
+            } else {
+                continue;
+            }
         }
     }
     map
@@ -275,6 +360,72 @@ pub fn minimerize_vector_skip_n(
     map
 }
 
+pub fn minimerize_vector_skip_n_set(
+    v: &Vec<String>,
+    k: usize,
+    m: usize,
+    d: usize,
+) -> fnv::FnvHashSet<std::string::String> {
+    let mut map = fnv::FnvHashSet::default();
+    for l in v {
+        let length_l = l.len();
+        if length_l < k {
+            continue;
+        } else {
+            let l_r = revcomp(&l);
+            for i in (0..l.len() - k + 1).step_by(d) {
+                //if i % d == 0 {
+                if seq::has_no_n(l[i..i + k].as_bytes()) {
+                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                        let min = find_minimizer(&l[i..i + k], m);
+                        map.insert(min.to_uppercase());
+                    } else {
+                        let min = find_minimizer(&l_r[length_l - (i + k)..length_l - i], m);
+                        map.insert(min.to_uppercase());
+                    }
+                } else {
+                    continue;
+                }
+                //}
+            }
+        }
+    }
+    map
+}
+
+pub fn minimerize_vector_skip_n_set_str(
+    v: &Vec<&str>,
+    k: usize,
+    m: usize,
+    d: usize,
+) -> fnv::FnvHashSet<std::string::String> {
+    let mut map = fnv::FnvHashSet::default();
+    for l in v {
+        let length_l = l.len();
+        if length_l < k {
+            continue;
+        } else {
+            let l_r = revcomp(&l);
+            for i in (0..l.len() - k + 1).step_by(d) {
+                //if i % d == 0 {
+                if seq::has_no_n(l[i..i + k].as_bytes()) {
+                    if l[i..i + k] < l_r[length_l - (i + k)..length_l - i] {
+                        let min = find_minimizer(&l[i..i + k], m);
+                        map.insert(min.to_uppercase());
+                    } else {
+                        let min = find_minimizer(&l_r[length_l - (i + k)..length_l - i], m);
+                        map.insert(min.to_uppercase());
+                    }
+                } else {
+                    continue;
+                }
+                //}
+            }
+        }
+    }
+    map
+}
+
 pub fn kmers_from_fq(filename: String, k: usize) -> fnv::FnvHashMap<std::string::String, usize> {
     let f = File::open(filename).expect("file not found");
     let mut map = fnv::FnvHashMap::default();
@@ -328,7 +479,7 @@ pub fn kmers_from_fq_qual(
             fastq.seq1 = l.to_owned();
         } else if line_count % 4 == 0 {
             fastq.qual1 = l.to_owned();
-            let masked1 = seq::qual_mask(fastq.seq1.to_owned(), fastq.qual1, qual_offset);
+            let masked1 = seq::qual_mask(&fastq.seq1, &fastq.qual1, qual_offset);
             for l in vec![masked1] {
                 let length_l = l.len();
                 if length_l < k {
@@ -465,8 +616,8 @@ pub fn kmers_fq_pe_qual(
                 Some(l2) => {
                     fastq.qual1 = l.to_owned();
                     fastq.qual2 = l2.unwrap().to_owned();
-                    let masked1 = seq::qual_mask(fastq.seq1.to_owned(), fastq.qual1, qual_offset);
-                    let masked2 = seq::qual_mask(fastq.seq2.to_owned(), fastq.qual2, qual_offset);
+                    let masked1 = seq::qual_mask(&fastq.seq1, &fastq.qual1, qual_offset);
+                    let masked2 = seq::qual_mask(&fastq.seq2, &fastq.qual2, qual_offset);
                     for l in vec![masked1, masked2] {
                         let length_l = l.len();
                         if length_l < k {
@@ -579,8 +730,8 @@ pub fn kmers_fq_pe_minimizer_qual(
                 Some(l2) => {
                     fastq.qual1 = l.to_owned();
                     fastq.qual2 = l2.unwrap().to_owned();
-                    let masked1 = seq::qual_mask(fastq.seq1.to_owned(), fastq.qual1, qual_offset);
-                    let masked2 = seq::qual_mask(fastq.seq2.to_owned(), fastq.qual2, qual_offset);
+                    let masked1 = seq::qual_mask(&fastq.seq1, &fastq.qual1, qual_offset);
+                    let masked2 = seq::qual_mask(&fastq.seq2, &fastq.qual2, qual_offset);
                     for l in vec![masked1, masked2] {
                         let length_l = l.len();
                         if length_l < k {
@@ -639,7 +790,7 @@ pub fn kmers_from_fq_minimizer_qual(
             fastq.seq1 = l.to_owned();
         } else if line_count % 4 == 0 {
             fastq.qual1 = l.to_owned();
-            let masked1 = seq::qual_mask(fastq.seq1.to_owned(), fastq.qual1, qual_offset);
+            let masked1 = seq::qual_mask(&fastq.seq1, &fastq.qual1, qual_offset);
             for l in vec![masked1] {
                 let length_l = l.len();
                 if length_l < k {
@@ -686,14 +837,14 @@ pub fn clean_map(
 }
 
 pub fn revcomp(dna: &str) -> String {
-    let mut rc_dna: String = String::with_capacity(dna.len());
+    let mut rc_dna = String::with_capacity(dna.len());
     for c in dna.chars().rev() {
-        rc_dna.push(switch_base(c))
+        rc_dna.push(switch_base(&c))
     }
     rc_dna
 }
 
-fn switch_base(c: char) -> char {
+fn switch_base(c: &char) -> char {
     match c {
         'a' => 't',
         'c' => 'g',
@@ -714,53 +865,79 @@ fn switch_base(c: char) -> char {
 //auto cutoff inference from Zam Iqbal's Cortex
 pub fn auto_cutoff(map: fnv::FnvHashMap<std::string::String, usize>) -> usize {
     let mut histo_map = fnv::FnvHashMap::default();
-    for (_key, value) in map {
+    let mut max_cov = 0;
+    for (_key, value) in &map {
+        if value > &max_cov{
+            max_cov = *value;
+        }
         *histo_map.entry(value).or_insert(0) += 1;
     }
-    let mut count_vec: Vec<_> = histo_map.iter().collect();
-    count_vec.sort_by(|&(a, _), &(b, _)| a.cmp(&b));
-    let mut coverages: Vec<usize> = Vec::with_capacity(count_vec.len());
-    for v in count_vec {
-        coverages.push(*v.1);
-    }
-    //first pseudo-derivative
-    let mut d1 = Vec::new();
-    for i in 1..coverages.len() - 1 {
-        d1.push(coverages[i] as f64 / coverages[i + 1] as f64);
-    }
-    //second pseudo-derivative
-    let mut d2 = Vec::new();
-    for i in 0..d1.len() - 1 {
-        d2.push(d1[i] / d1[i + 1]);
-    }
-    let mut first_pos_d1 = 0;
-    let mut first_pos_d2 = 0;
-    let threshold: f64 = 1.0;
-    for (i, p) in d1.iter().enumerate() {
-        if p < &threshold {
-            first_pos_d1 = i + 1;
-            break;
+    //eprintln!("length histo {}", histo_map.len());
+    //not in original code of Zam: do not filter when mean coverage is close to 1
+    let mut sum = 0;
+        for (i, p) in &histo_map {
+            sum += *i * p;
         }
-    }
-    for (i, p) in d2.iter().enumerate() {
-        if p < &threshold {
-            first_pos_d2 = i + 1;
-            break;
-        }
-    }
-    //estimate coverage (mean), exclude singleton k-mers
-    let mut bigsum = 0;
-    for (i, p) in coverages[1..].iter().enumerate() {
-        bigsum += i * p;
-    }
-    let num_kmers: usize = coverages[1..].iter().sum();
-    let mean: f64 = bigsum as f64 / num_kmers as f64;
-    if (first_pos_d1 > 0) && ((first_pos_d1 as f64) < (mean * 0.75)) {
-        first_pos_d1
-    } else if first_pos_d2 > 0 {
-        first_pos_d2
+    let num_kmers_total = map.len();
+    let total_mean: f64 = sum as f64 / num_kmers_total as f64;
+    if total_mean < 1.5 {
+        0
     } else {
-        cmp::max(1, (mean / 2.0).ceil() as usize)
+        let mut count_vec = Vec::with_capacity(max_cov);
+        for c in 1..max_cov{
+            if !histo_map.contains_key(&c){
+                count_vec.push((c,0));
+            }else{
+                count_vec.push((c, *histo_map.get(&c).unwrap()));
+            }
+        }
+        /*
+        let mut count_vec: Vec<_> = histo_map.iter().collect();
+        count_vec.sort_by(|&(a, _), &(b, _)| a.cmp(&b));
+        */
+        let mut coverages: Vec<usize> = Vec::with_capacity(count_vec.len());
+        for v in count_vec {
+            coverages.push(v.1);
+        }
+        //first pseudo-derivative
+        let mut d1 = Vec::new();
+        for i in 1..coverages.len() - 1 {
+            d1.push(coverages[i] as f64 / coverages[i + 1] as f64);
+        }
+        //second pseudo-derivative
+        let mut d2 = Vec::new();
+        for i in 0..d1.len() - 1 {
+            d2.push(d1[i] / d1[i + 1]);
+        }
+        let mut first_pos_d1 = 0;
+        let mut first_pos_d2 = 0;
+        let threshold: f64 = 1.0;
+        for (i, p) in d1.iter().enumerate() {
+            if p < &threshold {
+                first_pos_d1 = i + 1;
+                break;
+            }
+        }
+        for (i, p) in d2.iter().enumerate() {
+            if p < &threshold {
+                first_pos_d2 = i + 1;
+                break;
+            }
+        }
+        //estimate coverage (mean), exclude singleton k-mers
+        let mut bigsum = 0;
+        for (i, p) in coverages[1..].iter().enumerate() {
+            bigsum += i * p;
+        }
+        let num_kmers: usize = coverages[1..].iter().sum();
+        let mean: f64 = bigsum as f64 / num_kmers as f64;
+        if (first_pos_d1 > 0) && ((first_pos_d1 as f64) < (mean * 0.75)) {
+            first_pos_d1
+        } else if first_pos_d2 > 0 {
+            first_pos_d2
+        } else {
+            cmp::max(1, (mean / 2.0).ceil() as usize)
+        }
     }
 }
 

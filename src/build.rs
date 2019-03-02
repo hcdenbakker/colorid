@@ -84,9 +84,9 @@ pub fn build_single(
             } else {
                 let vec = kmer::read_fasta(v[0].to_string());
                 let kmers = if cutoff == -1 {
-                    kmer::kmerize_vector(vec, k_size, 1)
+                    kmer::kmerize_vector(&vec, k_size, 1)
                 } else {
-                    let unfiltered = kmer::kmerize_vector(vec, k_size, 1);
+                    let unfiltered = kmer::kmerize_vector(&vec, k_size, 1);
                     kmer::clean_map(unfiltered, cutoff as usize)
                 };
                 ref_kmer.insert(accession.to_string(), kmers.len());
@@ -159,31 +159,17 @@ pub fn build_multi(
     let bloom_vec: Vec<usize> = (0..bloom_size).collect();
     let d: Vec<_>;
     {
-    let c: Vec<_>;
-    eprintln!(
-        "Inference of Bloom filters in parallel using {} threads.",
-        t
-    );
-    c = map_vec
-        .par_iter()
-        .map(|l| {
-            if l.1.len() == 2 {
-                let unfiltered = kmer::kmers_fq_pe_qual(vec![&l.1[0], &l.1[1]], k_size, 1, quality);
-                let kmers = if cutoff == -1 {
-                    let auto_cutoff = kmer::auto_cutoff(unfiltered.to_owned());
-                    kmer::clean_map(unfiltered, auto_cutoff)
-                } else {
-                    kmer::clean_map(unfiltered, cutoff as usize)
-                };
-                let mut filter =
-                    simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
-                for kmer in kmers.keys() {
-                    filter.insert(&kmer);
-                }
-                (l.0, filter.bits, kmers.len())
-            } else {
-                if l.1[0].ends_with("gz") {
-                    let unfiltered = kmer::kmers_from_fq_qual(l.1[0].to_owned(), k_size, 1, 15);
+        let c: Vec<_>;
+        eprintln!(
+            "Inference of Bloom filters in parallel using {} threads.",
+            t
+        );
+        c = map_vec
+            .par_iter()
+            .map(|l| {
+                if l.1.len() == 2 {
+                    let unfiltered =
+                        kmer::kmers_fq_pe_qual(vec![&l.1[0], &l.1[1]], k_size, 1, quality);
                     let kmers = if cutoff == -1 {
                         let auto_cutoff = kmer::auto_cutoff(unfiltered.to_owned());
                         kmer::clean_map(unfiltered, auto_cutoff)
@@ -197,51 +183,66 @@ pub fn build_multi(
                     }
                     (l.0, filter.bits, kmers.len())
                 } else {
-                    let vec = kmer::read_fasta(l.1[0].to_string());
-                    let kmers = if cutoff == -1 {
-                        kmer::kmerize_vector(vec, k_size, 1)
+                    if l.1[0].ends_with("gz") {
+                        let unfiltered = kmer::kmers_from_fq_qual(l.1[0].to_owned(), k_size, 1, 15);
+                        let kmers = if cutoff == -1 {
+                            let auto_cutoff = kmer::auto_cutoff(unfiltered.to_owned());
+                            kmer::clean_map(unfiltered, auto_cutoff)
+                        } else {
+                            kmer::clean_map(unfiltered, cutoff as usize)
+                        };
+                        let mut filter =
+                            simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
+                        for kmer in kmers.keys() {
+                            filter.insert(&kmer);
+                        }
+                        (l.0, filter.bits, kmers.len())
                     } else {
-                        let unfiltered = kmer::kmerize_vector(vec, k_size, 1);
-                        kmer::clean_map(unfiltered, cutoff as usize)
-                    };
-                    let mut filter =
-                        simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
-                    for kmer in kmers.keys() {
-                        filter.insert(&kmer);
+                        let vec = kmer::read_fasta(l.1[0].to_string());
+                        let kmers = if cutoff == -1 {
+                            kmer::kmerize_vector(&vec, k_size, 1)
+                        } else {
+                            let unfiltered = kmer::kmerize_vector(&vec, k_size, 1);
+                            kmer::clean_map(unfiltered, cutoff as usize)
+                        };
+                        let mut filter =
+                            simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
+                        for kmer in kmers.keys() {
+                            filter.insert(&kmer);
+                        }
+                        (l.0, filter.bits, kmers.len())
                     }
-                    (l.0, filter.bits, kmers.len())
                 }
-            }
-        })
-        .collect();
-    for t in &c {
-        ref_kmer.insert(t.0.to_string(), t.2);
-    }
-    for accession in map.keys() {
-        accessions.push(accession);
-    }
-    accessions.sort();
-    //create hash table with colors for accessions
-    let num_taxa = accessions.len();
-    for (c, s) in accessions.iter().enumerate() {
-        accession_colors.insert(s.to_string(), c);
-        colors_accession.insert(c, s.to_string());
-    }
-    eprintln!("Creation of index, this may take a while!");
-    //create actual index, the most straight forward way, but not very efficient
-    d = bloom_vec
-        .par_iter()
-        .map(|i| {
-            let mut bitvec = BitVec::from_elem(num_taxa, false);
-            for a in &c {
-                if a.1[*i] {
-                    bitvec.set(accession_colors[&a.0.to_string()], true);
+            })
+            .collect();
+        for t in &c {
+            ref_kmer.insert(t.0.to_string(), t.2);
+        }
+        for accession in map.keys() {
+            accessions.push(accession);
+        }
+        accessions.sort();
+        //create hash table with colors for accessions
+        let num_taxa = accessions.len();
+        for (c, s) in accessions.iter().enumerate() {
+            accession_colors.insert(s.to_string(), c);
+            colors_accession.insert(c, s.to_string());
+        }
+        eprintln!("Creation of index, this may take a while!");
+        //create actual index, the most straight forward way, but not very efficient
+        d = bloom_vec
+            .par_iter()
+            .map(|i| {
+                let mut bitvec = BitVec::from_elem(num_taxa, false);
+                for a in &c {
+                    if a.1[*i] {
+                        bitvec.set(accession_colors[&a.0.to_string()], true);
+                    }
                 }
-            }
-            (i, bitvec)
-        })
-        .collect();
-    drop(c);
+                (i, bitvec)
+            })
+            .collect();
+        drop(c);
     }
     let mut bigsi_map = fnv::FnvHashMap::default();
     for t in d {
@@ -285,33 +286,17 @@ pub fn build_multi_mini(
     let bloom_vec: Vec<usize> = (0..bloom_size).collect();
     let d: Vec<_>;
     {
-    let c: Vec<_>;
-    eprintln!(
-        "Inference of Bloom filters in parallel using {} threads.",
-        t
-    );
-    c = map_vec
-        .par_iter()
-        .map(|l| {
-            if l.1.len() == 2 {
-                let unfiltered =
-                    kmer::kmers_fq_pe_minimizer_qual(vec![&l.1[0], &l.1[1]], k_size, m, 1, quality);
-                let kmers = if cutoff == -1 {
-                    let auto_cutoff = kmer::auto_cutoff(unfiltered.to_owned());
-                    kmer::clean_map(unfiltered, auto_cutoff)
-                } else {
-                    kmer::clean_map(unfiltered, cutoff as usize)
-                };
-                let mut filter =
-                    simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
-                for kmer in kmers.keys() {
-                    filter.insert(&kmer);
-                }
-                (l.0, filter.bits, kmers.len())
-            } else {
-                if l.1[0].ends_with("gz") {
-                    let unfiltered = kmer::kmers_from_fq_minimizer_qual(
-                        l.1[0].to_owned(),
+        let c: Vec<_>;
+        eprintln!(
+            "Inference of Bloom filters in parallel using {} threads.",
+            t
+        );
+        c = map_vec
+            .par_iter()
+            .map(|l| {
+                if l.1.len() == 2 {
+                    let unfiltered = kmer::kmers_fq_pe_minimizer_qual(
+                        vec![&l.1[0], &l.1[1]],
                         k_size,
                         m,
                         1,
@@ -330,52 +315,73 @@ pub fn build_multi_mini(
                     }
                     (l.0, filter.bits, kmers.len())
                 } else {
-                    let vec = kmer::read_fasta(l.1[0].to_string());
-                    let kmers = if cutoff == -1 {
-                        kmer::minimerize_vector_skip_n(&vec, k_size, m, 1)
+                    if l.1[0].ends_with("gz") {
+                        let unfiltered = kmer::kmers_from_fq_minimizer_qual(
+                            l.1[0].to_owned(),
+                            k_size,
+                            m,
+                            1,
+                            quality,
+                        );
+                        let kmers = if cutoff == -1 {
+                            let auto_cutoff = kmer::auto_cutoff(unfiltered.to_owned());
+                            kmer::clean_map(unfiltered, auto_cutoff)
+                        } else {
+                            kmer::clean_map(unfiltered, cutoff as usize)
+                        };
+                        let mut filter =
+                            simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
+                        for kmer in kmers.keys() {
+                            filter.insert(&kmer);
+                        }
+                        (l.0, filter.bits, kmers.len())
                     } else {
-                        let unfiltered = kmer::minimerize_vector_skip_n(&vec, k_size, m, 1);
-                        kmer::clean_map(unfiltered, cutoff as usize)
-                    };
-                    let mut filter =
-                        simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
-                    for kmer in kmers.keys() {
-                        filter.insert(&kmer);
+                        let vec = kmer::read_fasta(l.1[0].to_string());
+                        let kmers = if cutoff == -1 {
+                            kmer::minimerize_vector_skip_n(&vec, k_size, m, 1)
+                        } else {
+                            let unfiltered = kmer::minimerize_vector_skip_n(&vec, k_size, m, 1);
+                            kmer::clean_map(unfiltered, cutoff as usize)
+                        };
+                        let mut filter =
+                            simple_bloom::BloomFilter::new(bloom_size as usize, num_hash as usize);
+                        for kmer in kmers.keys() {
+                            filter.insert(&kmer);
+                        }
+                        (l.0, filter.bits, kmers.len())
                     }
-                    (l.0, filter.bits, kmers.len())
                 }
-            }
-        })
-        .collect();
-    for t in &c {
-        ref_kmer.insert(t.0.to_string(), t.2);
-    }
-    for accession in map.keys() {
-        accessions.push(accession);
-    }
-    accessions.sort();
-    //create hash table with colors for accessions
-    let num_taxa = accessions.len();
-    for (c, s) in accessions.iter().enumerate() {
-        accession_colors.insert(s.to_string(), c);
-        colors_accession.insert(c, s.to_string());
-    }
-    eprintln!("Creation of index, this may take a while!");
-    //create actual index, the most straight forward way, but not very efficient
-    //this can be done in parallel!
-    d = bloom_vec
-        .par_iter()
-        .map(|i| {
-            let mut bitvec = BitVec::from_elem(num_taxa, false);
-            for a in &c {
-                if a.1[*i] {
-                    bitvec.set(accession_colors[&a.0.to_string()], true);
-                }
-            }
-            (i, bitvec)
-        })
-        .collect();
+            })
+            .collect();
+        for t in &c {
+            ref_kmer.insert(t.0.to_string(), t.2);
         }
+        for accession in map.keys() {
+            accessions.push(accession);
+        }
+        accessions.sort();
+        //create hash table with colors for accessions
+        let num_taxa = accessions.len();
+        for (c, s) in accessions.iter().enumerate() {
+            accession_colors.insert(s.to_string(), c);
+            colors_accession.insert(c, s.to_string());
+        }
+        eprintln!("Creation of index, this may take a while!");
+        //create actual index, the most straight forward way, but not very efficient
+        //this can be done in parallel!
+        d = bloom_vec
+            .par_iter()
+            .map(|i| {
+                let mut bitvec = BitVec::from_elem(num_taxa, false);
+                for a in &c {
+                    if a.1[*i] {
+                        bitvec.set(accession_colors[&a.0.to_string()], true);
+                    }
+                }
+                (i, bitvec)
+            })
+            .collect();
+    }
     let mut bigsi_map = fnv::FnvHashMap::default();
     for t in d {
         if t.1.none() {
@@ -440,9 +446,9 @@ pub fn build_single_mini(
             } else {
                 let vec = kmer::read_fasta(v[0].to_string());
                 let kmers = if cutoff == -1 {
-                    kmer::kmerize_vector(vec, k_size, 1)
+                    kmer::kmerize_vector(&vec, k_size, 1)
                 } else {
-                    let unfiltered = kmer::kmerize_vector(vec, k_size, 1);
+                    let unfiltered = kmer::kmerize_vector(&vec, k_size, 1);
                     kmer::clean_map(unfiltered, cutoff as usize)
                 };
                 ref_kmer.insert(accession.to_string(), kmers.len());

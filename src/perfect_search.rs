@@ -17,7 +17,7 @@ pub fn batch_search(
         //only fasta formatted file!
         eprintln!("Counting k-mers, this may take a while!");
         let vec_query = kmer::read_fasta(file.to_owned());
-        let kmers_query = kmer::kmerize_vector(vec_query, k_size, 1);
+        let kmers_query = kmer::kmerize_vector(&vec_query, k_size, 1);
         eprintln!("{} kmers in query", kmers_query.len());
         if kmers_query.len() == 0 {
             eprintln!("Warning! no kmers in query; maybe your kmer length is larger than your query length?");
