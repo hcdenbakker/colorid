@@ -14,7 +14,7 @@ static GLOBAL: System = System;
 
 fn main() -> std::io::Result<()> {
     let matches = App::new("colorid")
-        .version("0.1.4.1")
+        .version("0.1.4.2")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .setting(AppSettings::ArgRequiredElseHelp)
@@ -273,6 +273,94 @@ fn main() -> std::io::Result<()> {
                         .short("n") //running out of options here!
                         .takes_value(true)
                         .long("prefix"),
+                )
+                .arg(
+                    Arg::with_name("down_sample")
+                        .help("down-sample k-mers used for read classification, default 1; increases speed at cost of decreased sensitivity ")
+                        .required(false)
+                        .short("d")
+                        .takes_value(true)
+                        .long("down_sample"),
+                )
+                .arg(
+                    Arg::with_name("high_mem_load")
+                        .help("When this flag is set, a faster, but less memory efficient method to load the index is used. Loading the index requires approximately 2X the size of the index of RAM. ")
+                        .required(false)
+                        .short("H")
+                        .takes_value(false)
+                        .long("high_mem_load"),
+                )
+                .arg(
+                    Arg::with_name("fp_correct")
+                        .help("Parameter to correct for false positives, default 3 (= 0.001), maybe increased for larger searches. Adjust for larger datasets")
+                        .required(false)
+                        .short("p")
+                        .takes_value(true)
+                        .long("fp_correct"),
+                )
+                .arg(
+                    Arg::with_name("quality")
+                        .help("kmers with nucleotides below this minimum phred score will be excluded from the analyses (default 15)")
+                        .required(false)
+                        .short("Q")
+                        .takes_value(true)
+                        .long("quality"),
+                )
+                .arg(
+                    Arg::with_name("bitvector_sample")
+                        .help("Collects matches for subset of kmers indicated (default=3), using this subset to more rapidly find hits for the remainder of the kmers")
+                        .required(false)
+                        .short("B")
+                        .takes_value(true)
+                        .long("bitvector_sample"),
+                        ),
+        )
+        .subcommand(
+            SubCommand::with_name("batch_id")
+                .about("classifies batch of samples reads")
+                .version("0.2")
+                .author("Henk den Bakker. <henkcdenbakker@gmail.com>")
+                .setting(AppSettings::ArgRequiredElseHelp)
+                .arg(
+                    Arg::with_name("bigsi")
+                        .short("b")
+                        .long("bigsi")
+                        .required(true)
+                        .takes_value(true)
+                        .help("index to be used for search"),
+                        )
+                .arg(
+                    Arg::with_name("query")
+                        .help("tab-delimiteed file with samples to be classified [sample_name reads1 reads2 (optional)]")
+                        .required(true)
+                        .min_values(1)
+                        .short("q")
+                        .takes_value(true)
+                        .long("query"),
+                )
+                .arg(
+                    Arg::with_name("tag")
+                        .help("tag to be include in output file names ")
+                        .required(true)
+                        .short("T") //
+                        .takes_value(true)
+                        .long("tag"),
+                )
+                .arg(
+                    Arg::with_name("batch")
+                        .help("Sets size of batch of reads to be processed in parallel (default 50,000)")
+                        .required(false)
+                        .short("c")
+                        .takes_value(true)
+                        .long("batch"),
+                )
+                .arg(
+                    Arg::with_name("threads")
+                        .help("number of threads to use, if not set the maximum available number threads will be used")
+                        .required(false)
+                        .short("t")
+                        .takes_value(true)
+                        .long("threads"),
                 )
                 .arg(
                     Arg::with_name("down_sample")
@@ -762,6 +850,21 @@ fn main() -> std::io::Result<()> {
             }
         }
         colorid::reports::read_counts_five_fields(prefix.to_owned() + "_reads.txt", prefix);
+    }
+    if let Some(matches) = matches.subcommand_matches("batch_id") {
+        let  batch_samples = matches.value_of("query").unwrap();
+        //let fq: Vec<_> = matches.values_of("query").unwrap().collect();
+        let threads = value_t!(matches, "threads", usize).unwrap_or(0);
+        let down_sample = value_t!(matches, "down_sample", usize).unwrap_or(1);
+        let correct = value_t!(matches, "fp_correct", f64).unwrap_or(3.0);
+        let fp_correct = 10f64.powf(-correct);
+        let index = matches.value_of("bigsi").unwrap();
+        let quality = value_t!(matches, "quality", u8).unwrap_or(15);
+        let batch = value_t!(matches, "batch", usize).unwrap_or(50000);
+        let high_mem_load = matches.is_present("high_mem_load");
+        let bitvector_sample = value_t!(matches, "bitvector_sample", usize).unwrap_or(3);
+        let tag = matches.value_of("tag").unwrap();
+        colorid::read_id_batch::read_id_batch(batch_samples, index, threads, down_sample, fp_correct, batch, quality, bitvector_sample, high_mem_load, tag);
     }
     if let Some(matches) = matches.subcommand_matches("read_filter") {
         let classification = matches.value_of("classification").unwrap();

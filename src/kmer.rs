@@ -867,7 +867,7 @@ pub fn auto_cutoff(map: fnv::FnvHashMap<std::string::String, usize>) -> usize {
     let mut histo_map = fnv::FnvHashMap::default();
     let mut max_cov = 0;
     for (_key, value) in &map {
-        if value > &max_cov{
+        if value > &max_cov {
             max_cov = *value;
         }
         *histo_map.entry(value).or_insert(0) += 1;
@@ -875,19 +875,19 @@ pub fn auto_cutoff(map: fnv::FnvHashMap<std::string::String, usize>) -> usize {
     //eprintln!("length histo {}", histo_map.len());
     //not in original code of Zam: do not filter when mean coverage is close to 1
     let mut sum = 0;
-        for (i, p) in &histo_map {
-            sum += *i * p;
-        }
+    for (i, p) in &histo_map {
+        sum += *i * p;
+    }
     let num_kmers_total = map.len();
     let total_mean: f64 = sum as f64 / num_kmers_total as f64;
     if total_mean < 1.5 {
         0
     } else {
         let mut count_vec = Vec::with_capacity(max_cov);
-        for c in 1..max_cov{
-            if !histo_map.contains_key(&c){
-                count_vec.push((c,0));
-            }else{
+        for c in 1..max_cov {
+            if !histo_map.contains_key(&c) {
+                count_vec.push((c, 0));
+            } else {
                 count_vec.push((c, *histo_map.get(&c).unwrap()));
             }
         }

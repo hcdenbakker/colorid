@@ -474,7 +474,7 @@ pub fn stream_fasta(
     let mut sub_string = String::new();
     ThreadPoolBuilder::new()
         .num_threads(t)
-        .build_global()
+        .build()
         .expect("Can't initialize ThreadPoolBuilder");
     let search_time = SystemTime::now();
     let mut count = 0;
@@ -734,7 +734,7 @@ pub fn per_read_stream_pe(
     let mut iter2 = io::BufReader::new(d2).lines();
     ThreadPoolBuilder::new()
         .num_threads(t)
-        .build_global()
+        .build()
         .expect("Can't initialize ThreadPoolBuilder");
     let mut read_count = 0;
     let mut fastq = seq::Fastq::new();
@@ -811,6 +811,7 @@ pub fn per_read_stream_pe(
         fp_correct,
         start_sample,
     );
+    read_count += c.len();
     eprint!("{} read pairs classified\r", read_count);
     for id in c {
         file.write_all(
@@ -872,7 +873,7 @@ pub fn per_read_stream_se(
     let iter1 = io::BufReader::new(d1).lines();
     ThreadPoolBuilder::new()
         .num_threads(t)
-        .build_global()
+        .build()
         .expect("Can't initialize ThreadPoolBuilder");
     let mut fastq = seq::Fastq::new();
     for line in iter1 {
