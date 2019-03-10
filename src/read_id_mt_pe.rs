@@ -472,10 +472,6 @@ pub fn stream_fasta(
     let mut file =
         File::create(format!("{}_reads.txt", prefix)).expect("could not create outfile!");
     let mut sub_string = String::new();
-    ThreadPoolBuilder::new()
-        .num_threads(t)
-        .build()
-        .expect("Can't initialize ThreadPoolBuilder");
     let search_time = SystemTime::now();
     let mut count = 0;
     let mut read_count = 0;
@@ -730,15 +726,12 @@ pub fn per_read_stream_pe(
     let f2 = File::open(&filenames[1]).expect("file not found");
     let d1 = MultiGzDecoder::new(f);
     let d2 = MultiGzDecoder::new(f2);
-    let iter1 = io::BufReader::new(d1).lines();
+    let mut iter1 = io::BufReader::new(d1).lines();
     let mut iter2 = io::BufReader::new(d2).lines();
-    ThreadPoolBuilder::new()
-        .num_threads(t)
-        .build()
-        .expect("Can't initialize ThreadPoolBuilder");
     let mut read_count = 0;
     let mut fastq = seq::Fastq::new();
     for line in iter1 {
+    //while let Some(line) = iter1.next() {
         let l = line.unwrap();
         let line2 = iter2.next();
         if line_count % 4 == 1 {
@@ -871,10 +864,6 @@ pub fn per_read_stream_se(
     let f = File::open(&filenames[0]).expect("file not found");
     let d1 = MultiGzDecoder::new(f);
     let iter1 = io::BufReader::new(d1).lines();
-    ThreadPoolBuilder::new()
-        .num_threads(t)
-        .build()
-        .expect("Can't initialize ThreadPoolBuilder");
     let mut fastq = seq::Fastq::new();
     for line in iter1 {
         let l = line.unwrap();

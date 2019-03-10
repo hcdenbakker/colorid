@@ -114,8 +114,9 @@ pub fn read_id_batch(
                 eprintln!("Error: {:?}", e);
             }
         }
-        for (prefix, fq_vec) in &batch_map {
-            eprintln!("Classifying {}", prefix);
+        for (accession, fq_vec) in &batch_map {
+            eprintln!("Classifying {}", accession);
+            let prefix = format!("{}_{}", accession, tag);
             let mut fq: Vec<_> = vec![];
             fq = fq_vec.iter().map(|r|{&r[..]}).collect();
             if fq[0].ends_with(".gz") {
@@ -174,7 +175,7 @@ pub fn read_id_batch(
                     bitvector_sample,
                 );
             }
-            reports::read_counts_five_fields(prefix.to_owned() + "_reads.txt", prefix);
+            reports::read_counts_five_fields(prefix.to_owned() + "_reads.txt", &prefix);
         }
     }
 }

@@ -1,4 +1,5 @@
 extern crate colorid;
+extern crate rayon;
 #[macro_use]
 extern crate clap;
 
@@ -8,6 +9,7 @@ use colorid::build;
 use colorid::read_id_mt_pe::false_prob;
 use std::alloc::System;
 use std::time::SystemTime;
+use rayon::ThreadPoolBuilder;
 
 #[global_allocator]
 static GLOBAL: System = System;
@@ -704,6 +706,10 @@ fn main() -> std::io::Result<()> {
         let batch = value_t!(matches, "batch", usize).unwrap_or(50000);
         let high_mem_load = matches.is_present("high_mem_load");
         let bitvector_sample = value_t!(matches, "bitvector_sample", usize).unwrap_or(3);
+        ThreadPoolBuilder::new()
+        .num_threads(threads)
+        .build_global()
+        .expect("Can't initialize ThreadPoolBuilder");
 
         if index.ends_with(".mxi") {
             //let metadata = fs::metadata(&index).expect("Can't read metadata index!");
@@ -855,6 +861,10 @@ fn main() -> std::io::Result<()> {
         let  batch_samples = matches.value_of("query").unwrap();
         //let fq: Vec<_> = matches.values_of("query").unwrap().collect();
         let threads = value_t!(matches, "threads", usize).unwrap_or(0);
+        ThreadPoolBuilder::new()
+        .num_threads(threads)
+        .build_global()
+        .expect("Can't initialize ThreadPoolBuilder");
         let down_sample = value_t!(matches, "down_sample", usize).unwrap_or(1);
         let correct = value_t!(matches, "fp_correct", f64).unwrap_or(3.0);
         let fp_correct = 10f64.powf(-correct);
@@ -864,6 +874,7 @@ fn main() -> std::io::Result<()> {
         let high_mem_load = matches.is_present("high_mem_load");
         let bitvector_sample = value_t!(matches, "bitvector_sample", usize).unwrap_or(3);
         let tag = matches.value_of("tag").unwrap();
+
         colorid::read_id_batch::read_id_batch(batch_samples, index, threads, down_sample, fp_correct, batch, quality, bitvector_sample, high_mem_load, tag);
     }
     if let Some(matches) = matches.subcommand_matches("read_filter") {
