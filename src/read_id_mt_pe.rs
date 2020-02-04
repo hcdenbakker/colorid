@@ -810,7 +810,7 @@ pub fn per_read_stream_pe(
         file.write_all(
             format!(
                 "{}\t{}\t{}\t{}\t{}\t{}\n",
-                id.0, id.1, id.2, id.3, id.4i, id.5
+                id.0, id.1, id.2, id.3, id.4, id.5
             )
             .as_bytes(),
         )
