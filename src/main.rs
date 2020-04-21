@@ -16,7 +16,7 @@ static GLOBAL: System = System;
 
 fn main() -> std::io::Result<()> {
     let matches = App::new("colorid")
-        .version("0.1.4.2")
+        .version("0.1.4.3")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")
         .about("BIGSI based taxonomic ID of sequence data")
         .setting(AppSettings::ArgRequiredElseHelp)
