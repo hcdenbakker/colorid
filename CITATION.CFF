@@ -1,0 +1,25 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: ColorID
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Hendrik
+    name-particle: C
+    family-names: Den Bakker
+    email: hendrik.denbakker@uga.edu
+    affiliation: 'Center for Food Safety, University of Georgia'
+    orcid: 'https://orcid.org/0000-0002-4086-1580'
+  - given-names: Lee
+    name-particle: S
+    family-names: Katz
+    email: gzu2@cdc.gov
+    affiliation: 'Center for Food Safety, University of Georgia'
+    orcid: 'https://orcid.org/0000-0002-2533-9161'
+repository-code: 'https://github.com/hcdenbakker/colorid'
+abstract: BIGSI data-structure implementation
+license: MIT
