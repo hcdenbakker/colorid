@@ -1,5 +1,5 @@
 use bit_vec::BitVec;
-use fasthash;
+use xxh3;
 use fnv;
 use kmer;
 use reports;
@@ -46,7 +46,7 @@ pub fn batch_search(
                 let mut kmer_slices = Vec::new();
                 for i in 0..num_hash {
                     let bit_index =
-                        fasthash::xx::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
+                        xxh3::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
                     let bi = bit_index as usize;
                     if !bigsi_map.contains_key(&bi) {
                         break;
@@ -126,7 +126,7 @@ pub fn batch_search(
                 let mut kmer_slices = Vec::new();
                 for i in 0..num_hash {
                     let bit_index =
-                        fasthash::xx::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
+                        xxh3::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
                     let bi = bit_index as usize;
                     if !bigsi_map.contains_key(&bi) {
                         break;

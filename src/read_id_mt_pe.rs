@@ -1,5 +1,5 @@
 use bit_vec::BitVec;
-use fasthash;
+use xxh3;
 use flate2::read::MultiGzDecoder;
 use fnv;
 use kmer;
@@ -76,7 +76,7 @@ pub fn search_index_classic(
         let mut kmer_slices = Vec::new();
         for i in 0..num_hash {
             let bit_index =
-                fasthash::xx::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
+                xxh3::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
             let bi = bit_index as usize;
             if !bigsi_map.contains_key(&bi) || bigsi_map[&bi] == empty_bitvec {
                 break;
@@ -117,7 +117,7 @@ pub fn search_index(
             let mut kmer_slices = Vec::new();
             for i in 0..num_hash {
                 let bit_index =
-                    fasthash::xx::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
+                    xxh3::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
                 match bigsi_map.get(&(bit_index as usize)) {
                     Some(bit_array) => kmer_slices.push(bit_array),
                     None => break,
@@ -141,7 +141,7 @@ pub fn search_index(
             let mut kmer_slices = Vec::new();
             for i in 0..num_hash {
                 let bit_index =
-                    fasthash::xx::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
+                    xxh3::hash64_with_seed(&k.as_bytes(), i as u64) % bloom_size as u64;
                 match bigsi_map.get(&(bit_index as usize)) {
                     Some(bit_array) => kmer_slices.push(bit_array),
                     None => break,

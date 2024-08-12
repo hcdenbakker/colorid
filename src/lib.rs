@@ -1,6 +1,6 @@
 extern crate bincode;
 extern crate bit_vec;
-extern crate fasthash;
+extern crate xxh3;
 extern crate flate2;
 extern crate fnv;
 extern crate probability;

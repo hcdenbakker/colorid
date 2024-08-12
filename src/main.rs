@@ -2,6 +2,7 @@ extern crate colorid;
 extern crate rayon;
 #[macro_use]
 extern crate clap;
+extern crate env_logger;
 
 use clap::{App, AppSettings, Arg, SubCommand};
 use colorid::bigsi;
@@ -10,11 +11,19 @@ use colorid::read_id_mt_pe::false_prob;
 use std::alloc::System;
 use std::time::SystemTime;
 use rayon::ThreadPoolBuilder;
+use env_logger::Builder;
+
+pub fn init_log() -> u64 {
+    Builder::from_default_env().init();
+    println!("\n ************** initializing logger *****************\n");
+    1
+}
 
 #[global_allocator]
 static GLOBAL: System = System;
 
 fn main() -> std::io::Result<()> {
+    let _ = init_log();
     let matches = App::new("colorid")
         .version("0.1.4.3")
         .author("Henk C. den Bakker <henkcdenbakker@gmail.com>")

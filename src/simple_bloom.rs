@@ -2,7 +2,7 @@
 extern crate bit_vec;
 
 use bit_vec::BitVec;
-use fasthash;
+use xxh3;
 
 pub struct BloomFilter {
     pub bits: BitVec,      // Bit vector
@@ -19,7 +19,7 @@ impl BloomFilter {
     pub fn insert(&mut self, value: &str) {
         // Generate a bit index for each of the hash functions needed
         for i in 0..self.num_hashes {
-            let bit_index = (fasthash::xx::hash64_with_seed(&value.as_bytes(), i as u64)
+            let bit_index = (xxh3::hash64_with_seed(&value.as_bytes(), i as u64)
                 % (self.bits.len() as u64)) as u64;
             self.bits.set(bit_index as usize, true);
         }
@@ -27,7 +27,7 @@ impl BloomFilter {
 
     pub fn contains(&self, value: &str) -> bool {
         for i in 0..self.num_hashes {
-            let bit_index = (fasthash::xx::hash64_with_seed(&value.as_bytes(), i as u64)
+            let bit_index = (xxh3::hash64_with_seed(&value.as_bytes(), i as u64)
                 % (self.bits.len() as u64)) as u64;
 
             if self.bits[bit_index as usize] == false {
